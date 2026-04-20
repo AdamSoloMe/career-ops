@@ -1,9 +1,9 @@
 # Roadmap: career-ops High-Velocity Job Search Engine
 
-**Project:** career-ops extension — Discovery + ATS Scoring + Contact Finder
+**Project:** career-ops extension — Discovery + ATS Scoring + Apply-Ready Automation + Contact Finder
 **Created:** 2026-04-19
 **Milestone:** v1
-**Requirements coverage:** DISC-01–06, ATS-01–04, OUT-01–05 (15/15 v1 requirements)
+**Requirements coverage:** DISC-01–06, ATS-01–04, PIPE-01–05, OUT-01–05 (20/20 v1 requirements)
 
 ---
 
@@ -18,18 +18,24 @@
 2. Title keywords can be changed in `config/profile.yml` and the next scan picks them up without code changes
 3. GitHub Actions cron runs daily at a configured time and commits updated `data/pipeline.md` and `data/scan-history.tsv` to the repo
 4. The same job posted on LinkedIn and Indeed under different tracking URLs appears only once in the pipeline
+5. Running `node scan.mjs --dry-run` shows jobs from RemoteOK and newgrad-jobs.com with zero API keys
+6. tracked_companies list is optional — scanner discovers jobs without it via aggregators
 
-**Plans:** 2 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — scan-core.mjs extraction + Adzuna + SerpAPI + profile.yml discovery section
-- [ ] 01-02-PLAN.md — GitHub Actions daily cron workflow with commit-back
+- [x] 01-01-PLAN.md — scan-core.mjs extraction + Adzuna + SerpAPI + profile.yml discovery section
+- [x] 01-02-PLAN.md — GitHub Actions daily cron workflow with commit-back
+- [x] 01-03-PLAN.md — Zero-key aggregator scrapers (RemoteOK, newgrad-jobs.com, HN Hiring)
 
 ### 1.1 — Extend scan.mjs with Adzuna + SerpAPI sources
 Extract shared dedup/write utilities into `scan-core.mjs`. Add Adzuna REST API integration and SerpAPI Google Jobs integration to `scan.mjs`. Read job title keywords from `config/profile.yml` (`search_queries` or `title_filter.positive`). Normalize LinkedIn/Indeed URLs before dedup check (extract numeric job ID / `jk=` param).
 
 ### 1.2 — GitHub Actions daily cron
 Create `.github/workflows/daily-scan.yml` that runs `node scan.mjs` on a daily schedule. Configure repo secrets for `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `SERPAPI_KEY`. Commit updated `data/pipeline.md` and `data/scan-history.tsv` back to repo after each scan run.
+
+### 1.3 — Zero-key aggregator scrapers
+Add RemoteOK (public JSON API) and newgrad-jobs.com (HTML scraper) as zero-credential sources. Add HN "Who's Hiring" monthly thread scraper via Firebase API. Each source follows the `fetchSource(titleFilter, seenUrls, seenCompanyRoles) → {results, errors}` pattern. Config per-source in `portals.yml`. See `01-HANDOFF.md` for remaining tasks.
 
 ---
 
@@ -59,7 +65,34 @@ Update `modes/auto-pipeline.md` Step 2 to include Block I in saved reports and a
 
 ---
 
-## Phase 3: Contact Finder
+## Phase 3: Apply-Ready Automation
+
+**Goal:** Every relevant discovered job is processed into an apply-ready packet automatically: evaluated, ATS-scored, paired with the best tailored resume, and queued for fast human submission without manual job-by-job orchestration.
+
+**Requirements:** PIPE-01, PIPE-02, PIPE-03, PIPE-04, PIPE-05
+
+**Success Criteria:**
+1. Running the pipeline against new jobs in `data/pipeline.md` can process multiple jobs automatically without pasting each URL manually
+2. Jobs above a configurable fit threshold automatically get a fresh evaluation report and tailored ATS-optimized resume output
+3. The system writes an application queue artifact with the job, score, ATS score, generated resume path, and a clear submit-next action
+4. Low-fit, duplicate, stale, or suspicious jobs are skipped automatically based on configurable rules rather than generating wasteful resumes
+5. The workflow never submits applications on the user's behalf; it produces a human-reviewable queue optimized for rapid manual submission
+
+**Plans:**
+- [x] 03-01-PLAN.md — Automated triage and queue builder
+- [x] 03-02-PLAN.md — Auto-generate best resume and application packet
+
+2/2 plans complete
+
+### 3.1 — Automated triage and queue builder
+Extend the existing pipeline flow so new jobs discovered in `data/pipeline.md` can be batch-evaluated automatically, filtered by configurable fit and legitimacy thresholds, and written into a new apply-ready queue artifact. Reuse existing evaluation/report/tracker logic rather than building a parallel pipeline.
+
+### 3.2 — Auto-generate best resume and application packet
+Wire ATS scoring, PDF/LaTeX generation, and tracker context into the queue so each approved job gets the strongest available tailored resume plus a compact application packet. Add configurable thresholds and caps so the system can support high-volume apply-ready output without auto-submitting applications.
+
+---
+
+## Phase 4: Contact Finder
 
 **Goal:** For any evaluated or applied job, the candidate can look up hiring managers, engineers, and internal recruiters at that company in seconds — with results cached so free API credits aren't wasted.
 
@@ -73,10 +106,10 @@ Update `modes/auto-pipeline.md` Step 2 to include Block I in saved reports and a
 
 **Plans:**
 
-### 3.1 — Contact lookup engine
+### 4.1 — Contact lookup engine
 Extend `modes/contacto.md` with email-based contact discovery flow: (1) check `data/contacts-cache.md` for existing results, (2) scrape company `/about` and `/team` page via Playwright for names/roles, (3) call Hunter.io domain search API if no cached result. Write found contacts to cache keyed by company domain. Display remaining Hunter.io credits from API response header.
 
-### 3.2 — contacts-cache.md schema + SKILL.md wiring
+### 4.2 — contacts-cache.md schema + SKILL.md wiring
 Define `data/contacts-cache.md` format (USER layer, markdown table: domain, name, role, email, confidence, date). Add `contacts` as a new command alias in `.claude/skills/career-ops/SKILL.md`, `.opencode/commands/`, and `.gemini/commands/`. Update `DATA_CONTRACT.md` and `CLAUDE.md` to document new data file.
 
 ---
@@ -95,13 +128,18 @@ Define `data/contacts-cache.md` format (USER layer, markdown table: domain, name
 | ATS-02 | Phase 2 | 2.1 + 2.2 |
 | ATS-03 | Phase 2 | 2.1 |
 | ATS-04 | Phase 2 | 2.1 |
-| OUT-01 | Phase 3 | 3.1 |
-| OUT-02 | Phase 3 | 3.1 |
-| OUT-03 | Phase 3 | 3.1 + 3.2 |
-| OUT-04 | Phase 3 | 3.1 |
-| OUT-05 | Phase 3 | 3.2 |
+| PIPE-01 | Phase 3 | 3.1 |
+| PIPE-02 | Phase 3 | 3.2 |
+| PIPE-03 | Phase 3 | 3.1 + 3.2 |
+| PIPE-04 | Phase 3 | 3.1 |
+| PIPE-05 | Phase 3 | 3.2 |
+| OUT-01 | Phase 4 | 4.1 |
+| OUT-02 | Phase 4 | 4.1 |
+| OUT-03 | Phase 4 | 4.1 + 4.2 |
+| OUT-04 | Phase 4 | 4.1 |
+| OUT-05 | Phase 4 | 4.2 |
 
-**Coverage:** 15/15 v1 requirements mapped
+**Coverage:** 20/20 v1 requirements mapped
 
 ---
-*Created: 2026-04-19 | Milestone: v1 | Updated: 2026-04-20 (Phase 2 plans)*
+*Created: 2026-04-19 | Milestone: v1 | Updated: 2026-04-20 (Phase 3 reordered for apply-ready automation)*

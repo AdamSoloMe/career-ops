@@ -21,6 +21,14 @@
 - [ ] **ATS-03**: ATS score distinguishes between hard skills keywords, job title match, and soft skills/action verbs — not a single raw count
 - [ ] **ATS-04**: ATS platform is inferred from the job URL (Greenhouse, Lever, Ashby, Workday, Taleo) and the score report notes expected strictness level per platform
 
+### Apply-Ready Automation
+
+- [x] **PIPE-01**: System can process jobs from `data/pipeline.md` in batch and produce evaluation artifacts without requiring the user to paste each job URL manually
+- [x] **PIPE-02**: Jobs above a configurable fit threshold automatically generate an ATS-optimized resume artifact using the existing PDF/LaTeX pipeline
+- [x] **PIPE-03**: System writes an application queue artifact containing company, role, score, ATS score, report path, resume path, and next action
+- [x] **PIPE-04**: The automation skips low-fit, duplicate, stale, or suspicious jobs using configurable thresholds and legitimacy signals
+- [x] **PIPE-05**: The pipeline stops at an apply-ready queue and never submits applications on the user's behalf
+
 ### Contact Finder
 
 - [ ] **OUT-01**: For any job in `data/applications.md` with status `Evaluated` or `Applied`, system can find contacts at that company (hiring managers, engineers, internal recruiters)
@@ -67,7 +75,8 @@
 |-------------|-------|
 | DISC-01 – DISC-06 | Phase 1: Enhanced Discovery |
 | ATS-01 – ATS-04 | Phase 2: ATS Resume Scoring |
-| OUT-01 – OUT-05 | Phase 3: Contact Finder |
+| PIPE-01 – PIPE-05 | Phase 3: Apply-Ready Automation |
+| OUT-01 – OUT-05 | Phase 4: Contact Finder |
 
 ---
-*Last updated: 2026-04-19 — initial v1 scope definition*
+*Last updated: 2026-04-20 — Phase 3 reordered for apply-ready automation*
