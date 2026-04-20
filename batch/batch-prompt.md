@@ -154,6 +154,68 @@ Analyze posting signals to assess whether this is a real, active opening.
 
 **Assessment:** Apply the same three tiers (High Confidence / Proceed with Caution / Suspicious), weighting available signals more heavily. If insufficient signals are available to make a determination, default to "Proceed with Caution" with a note about limited data.
 
+#### Bloque I — Análisis ATS
+
+Lee `cv.md` (ya cargado para Bloque B). Si `cv.md` no existe, escribir `**ATS:** N/A (cv.md not found)` y omitir el bloque.
+
+**Extracción de keywords del JD** (ignorar boilerplate: beneficios, equal opportunity, ubicación, visa):
+
+**Hard skills (peso: 45%):** Herramientas, frameworks, lenguajes, plataformas, metodologías (ej: Python, LangChain, Kubernetes, RAG). Máximo 15-20 términos más específicos. Priorizar "required" y "preferred".
+
+**Job title keywords (peso: 25%):** Palabras del título y modificadores de seniority (Senior, Staff, Lead, Head of, Engineer, Manager, Architect).
+
+**Soft skills / action verbs (peso: 15%):** Verbos de acción (led, built, shipped, mentored, owned) y señales soft (cross-functional, stakeholder, strategic).
+
+**Quantification / evidence (peso: 15%):** Si el JD enfatiza ownership, scope, metrics, business impact o outcomes, evaluar si `cv.md` aporta evidencia concreta y resultados medibles.
+
+**Puntuación:** Match completo (1.0) / Match parcial (0.8 recomendado, anotar "(partial)") / Ausente (0.0)
+Calibrar según ATS inferido: Taleo y algunos flujos de SuccessFactors exigen wording más exacto; Workday/iCIMS/Greenhouse toleran más semántica; Lever es más flexible; Ashby prioriza evidencia de criterios cumplidos.
+Score categoría = (suma matches) / (total keywords) × 100%
+
+**ATS Simulation Score** = (hard × 0.60) + (title × 0.25) + (soft × 0.15)
+Usar esto como score alineado con ATS Screener cuando el insumo es `cv.md`: no inventar formatting/parser quality, no incluir education salvo que el JD la exija explícitamente, y usar Ashby como extensión específica del proyecto, no como paridad ATS Screener.
+
+**Screening Readiness Score** = (hard × 0.45) + (title × 0.25) + (soft × 0.15) + (evidence × 0.15)
+Este score sí incorpora outcomes, ownership, scope y cuantificación como heurística propia de career-ops.
+
+**Inferencia de plataforma ATS por URL:**
+
+| URL contiene | Plataforma | Strictness |
+|-------------|------------|------------|
+| greenhouse.io | Greenhouse | Moderate — fuzzy + semantic |
+| lever.co | Lever | Flexible — stemming, most forgiving |
+| ashbyhq.com | Ashby | Criterion-based — binary Meets/Does-not-Meet |
+| myworkdayjobs.com / workday.com | Workday | Moderate — NLP synonym support |
+| taleo.net | Taleo | Strictest — exact match only |
+| icims.com | iCIMS | Moderate — keyword + skills taxonomy |
+| successfactors.com / sapsf.com | SAP SuccessFactors | Moderate-strict — structured fields matter |
+| (ningún match) | Unknown | Assume moderate |
+
+**Output del Bloque I:**
+
+**ATS Simulation Score:** {sim_score}% ({plataforma} — {strictness})
+**Screening Readiness Score:** {ready_score}%
+
+| Categoría | Matched | Missing | Score |
+|-----------|---------|---------|-------|
+| Hard skills (45%) | {lista} | {lista} | {x}/{n} = {%}% |
+| Job title (25%) | {lista} | {lista} | {x}/{n} = {%}% |
+| Soft skills (15%) | {lista} | {lista} | {x}/{n} = {%}% |
+| Quantification / evidence (15%) | {strengths} | {gaps} | {x}/{n} = {%}% |
+
+**Simulation formula:** ({hard}% × 0.60) + ({title}% × 0.25) + ({soft}% × 0.15) = **{sim_score}%**
+**Readiness formula:** ({hard}% × 0.45) + ({title}% × 0.25) + ({soft}% × 0.15) + ({evidence}% × 0.15) = **{ready_score}%**
+
+Para cada keyword ausente de hard skills / job title — guía de placement:
+**Missing: {keyword}** — Añadir a "Experience > {Empresa} > {bullet específico}".
+Sugerencia: "...{frase natural integrando keyword en experiencia real - NUNCA inventar}..."
+
+Missing soft skills (sin placement específico): {lista}
+
+Si el problema es humano más que ATS:
+**Weak evidence: {theme}** — Reforzar "Experience > {Empresa} > {bullet específico}" con métricas, alcance u ownership real.
+Sugerencia: "...{frase natural agregando outcome o escala real sin inventar}..."
+
 #### Score Global
 
 | Dimensión | Score |
@@ -182,6 +244,7 @@ Donde `{company-slug}` es el nombre de empresa en lowercase, sin espacios, con g
 **Fecha:** {{DATE}}
 **Arquetipo:** {detectado}
 **Score:** {X/5}
+**ATS:** Sim {sim_score}% | Ready {ready_score}% ({platform}) — Missing: {kw1}, {kw2}, {kw3}
 **Legitimacy:** {High Confidence | Proceed with Caution | Suspicious}
 **URL:** {URL de la oferta original}
 **PDF:** career-ops/output/cv-candidate-{company-slug}-{{DATE}}.pdf
@@ -209,6 +272,9 @@ Donde `{company-slug}` es el nombre de empresa en lowercase, sin espacios, con g
 
 ## G) Posting Legitimacy
 (contenido completo)
+
+## I) ATS Analysis
+(contenido completo del bloque I)
 
 ---
 
@@ -335,6 +401,8 @@ Al terminar, imprime por stdout un resumen JSON para que el orquestador lo parse
   "role": "{rol}",
   "score": {score_num},
   "legitimacy": "{High Confidence|Proceed with Caution|Suspicious}",
+  "ats_simulation_score": {ats_sim_score_integer_or_null},
+  "screening_readiness_score": {ready_score_integer_or_null},
   "pdf": "{ruta_pdf}",
   "report": "{ruta_report}",
   "error": null
@@ -350,6 +418,8 @@ Si algo falla:
   "company": "{empresa_o_unknown}",
   "role": "{rol_o_unknown}",
   "score": null,
+  "ats_simulation_score": null,
+  "screening_readiness_score": null,
   "pdf": null,
   "report": "{ruta_report_si_existe}",
   "error": "{descripción_del_error}"

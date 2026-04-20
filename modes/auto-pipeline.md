@@ -21,7 +21,7 @@ Ejecutar exactamente igual que el modo `oferta` (leer `modes/oferta.md` para tod
 
 ## Paso 2 — Guardar Report .md
 Guardar la evaluación completa en `reports/{###}-{company-slug}-{YYYY-MM-DD}.md` (ver formato en `modes/oferta.md`).
-Include Block G in the saved report. Add `**Legitimacy:** {tier}` to the report header.
+Include Block G and Block I in the saved report. Add `**Legitimacy:** {tier}` to the report header. Add `**ATS:** Sim {sim_score}% | Ready {ready_score}% ({platform}) — Missing: {kw1}, {kw2}, {kw3}` to the report header between **Score:** and **Legitimacy:**.
 
 ## Paso 3 — Generar PDF
 Ejecutar el pipeline completo de `pdf` (leer `modes/pdf.md`).
