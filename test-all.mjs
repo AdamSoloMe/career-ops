@@ -261,6 +261,13 @@ if (shared.includes('_profile.md')) {
   fail('_shared.md does NOT reference _profile.md');
 }
 
+const oferta = readFile('modes/oferta.md');
+if (/\*\*ATS:\*\* Sim \{sim_score\}% \| Ready \{ready_score\}% \(\{platform\}\)/.test(oferta)) {
+  pass('oferta.md includes ATS header format');
+} else {
+  fail('oferta.md missing ATS header format');
+}
+
 // ── 9. CLAUDE.md INTEGRITY ──────────────────────────────────────
 
 console.log('\n9. CLAUDE.md integrity');
