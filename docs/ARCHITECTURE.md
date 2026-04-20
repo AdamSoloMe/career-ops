@@ -20,13 +20,13 @@
             │           │ (URL inbox) │          │ (claude -p)
             │           └─────────────┘          └────┬─────┘
             │                                          │
-     ┌──────▼──────────────────────────────────────────▼──────┐
-     │                    Output Pipeline                      │
-     │  ┌──────────┐  ┌────────────┐  ┌───────────────────┐  │
-     │  │ Report.md│  │  PDF (HTML  │  │ Tracker TSV       │  │
-     │  │ (A-F eval)│  │  → Puppeteer)│  │ (merge-tracker)  │  │
-     │  └──────────┘  └────────────┘  └───────────────────┘  │
-     └────────────────────────────────────────────────────────┘
+     ┌──────▼──────────────────────────────────────────▼────────────────────┐
+     │                         Output Pipeline                              │
+     │  ┌──────────┐  ┌────────────┐  ┌───────────────────┐  ┌───────────┐ │
+     │  │ Report.md│  │  PDF (HTML │  │ Tracker TSV       │  │ Apply Queue│ │
+     │  │ (A-F eval)│ │  → Puppeteer)│ │ (merge-tracker)  │  │ + packets  │ │
+     │  └──────────┘  └────────────┘  └───────────────────┘  └───────────┘ │
+     └───────────────────────────────────────────────────────────────────────┘
                                │
                     ┌──────────▼──────────┐
                     │  data/applications.md │
@@ -70,6 +70,28 @@ Each worker is a headless Claude instance (`claude -p`) that receives the full `
 
 The orchestrator manages parallelism, state, retries, and resume.
 
+## Apply-Ready Queue
+
+Phase 3 adds a second automation layer on top of batch evaluation:
+
+```
+data/pipeline.md
+  → prep-apply-queue.mjs sync-input
+  → batch/batch-runner.sh --from-pipeline
+  → worker JSON output
+  → data/apply-queue.md
+  → reports/packets/{report-num}-{company}-{date}/packet.md
+```
+
+The queue only admits jobs that pass the locked gate:
+- score `>= 4.0`
+- ATS `>= 70`
+- legitimacy is not `Suspicious`
+
+`data/apply-queue.md` is a user-layer review surface, not a replacement for `data/applications.md`. The tracker remains the canonical history of evaluated and applied jobs, while the queue tracks which jobs are ready for human review.
+
+Per-job packet manifests live under `reports/packets/` and link back to the main report plus resume artifacts. This automation stops at packet creation; manual submission remains the user's action.
+
 ## Data Flow
 
 ```
@@ -79,6 +101,8 @@ config/profile.yml       →  Candidate identity
 portals.yml              →  Scanner configuration
 templates/states.yml     →  Canonical status values
 templates/cv-template.html → PDF generation template
+data/apply-queue.md      →  Apply-ready review queue
+reports/packets/*/packet.md → Manual review packet manifests
 ```
 
 ## File Naming Conventions

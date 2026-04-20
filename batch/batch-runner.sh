@@ -28,6 +28,7 @@ RETRY_FAILED=false
 START_FROM=0
 MAX_RETRIES=2
 MIN_SCORE=0
+FROM_PIPELINE=false
 
 usage() {
   cat <<'USAGE'
@@ -43,6 +44,7 @@ Options:
   --start-from N       Start from offer ID N (skip earlier IDs)
   --max-retries N      Max retry attempts per offer (default: 2)
   --min-score N        Skip PDF/tracker for offers scoring below N (default: 0 = off)
+  --from-pipeline      Build batch-input.tsv from data/pipeline.md before processing
   -h, --help           Show this help
 
 Files:
@@ -76,6 +78,7 @@ while [[ $# -gt 0 ]]; do
     --start-from) START_FROM="$2"; shift 2 ;;
     --max-retries) MAX_RETRIES="$2"; shift 2 ;;
     --min-score) MIN_SCORE="$2"; shift 2 ;;
+    --from-pipeline) FROM_PIPELINE=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1"; usage; exit 1 ;;
   esac
@@ -109,11 +112,6 @@ trap release_lock EXIT
 
 # Validate prerequisites
 check_prerequisites() {
-  if [[ ! -f "$INPUT_FILE" ]]; then
-    echo "ERROR: $INPUT_FILE not found. Add offers first."
-    exit 1
-  fi
-
   if [[ ! -f "$PROMPT_FILE" ]]; then
     echo "ERROR: $PROMPT_FILE not found."
     exit 1
@@ -121,6 +119,11 @@ check_prerequisites() {
 
   if ! command -v claude &>/dev/null; then
     echo "ERROR: 'claude' CLI not found in PATH."
+    exit 1
+  fi
+
+  if [[ "$FROM_PIPELINE" == "true" && ! -f "$PROJECT_DIR/prep-apply-queue.mjs" ]]; then
+    echo "ERROR: $PROJECT_DIR/prep-apply-queue.mjs not found."
     exit 1
   fi
 
@@ -304,6 +307,81 @@ reserve_report_num() {
   run_with_state_lock reserve_report_num_unlocked "$@"
 }
 
+extract_worker_fields() {
+  local log_file="$1"
+  node -e '
+const fs = require("fs");
+const text = fs.readFileSync(process.argv[1], "utf8");
+const blocks = [];
+let start = -1;
+let depth = 0;
+let inString = false;
+let escaped = false;
+for (let i = 0; i < text.length; i += 1) {
+  const char = text[i];
+  if (start === -1) {
+    if (char === "{") {
+      start = i;
+      depth = 1;
+      inString = false;
+      escaped = false;
+    }
+    continue;
+  }
+  if (inString) {
+    if (escaped) {
+      escaped = false;
+    } else if (char === "\\\\") {
+      escaped = true;
+    } else if (char === "\"") {
+      inString = false;
+    }
+    continue;
+  }
+  if (char === "\"") {
+    inString = true;
+    continue;
+  }
+  if (char === "{") depth += 1;
+  if (char === "}") {
+    depth -= 1;
+    if (depth === 0) {
+      blocks.push(text.slice(start, i + 1));
+      start = -1;
+    }
+  }
+}
+let payload = null;
+for (const block of blocks) {
+  try {
+    const parsed = JSON.parse(block);
+    if (parsed && typeof parsed === "object" && Object.prototype.hasOwnProperty.call(parsed, "status") && Object.prototype.hasOwnProperty.call(parsed, "id")) {
+      payload = parsed;
+    }
+  } catch {}
+}
+if (!payload) process.exit(1);
+const values = [
+  payload.status ?? "",
+  payload.score ?? "",
+  payload.company ?? "",
+  payload.role ?? "",
+  payload.legitimacy ?? "",
+  payload.ats_simulation_score ?? "",
+  payload.screening_readiness_score ?? "",
+  payload.report ?? "",
+  payload.error ?? ""
+];
+process.stdout.write(values.map((value) => String(value).replace(/[\t\r\n]+/g, " ").trim()).join("\t"));
+' "$log_file"
+}
+
+sync_pipeline_input() {
+  echo "=== Syncing pipeline candidates into batch input ==="
+  node "$PROJECT_DIR/prep-apply-queue.mjs" sync-input
+  echo ""
+}
+
 # Process a single offer
 process_offer() {
   local id="$1" url="$2" source="$3" notes="$4"
@@ -365,12 +443,31 @@ process_offer() {
   completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
   if [[ $exit_code -eq 0 ]]; then
-    # Try to extract score from worker output
+    local worker_fields=""
+    local worker_status=""
     local score="-"
-    local score_match
-   score_match=$(sed -nE 's/.*"score":[[:space:]]*([0-9.]+).*/\1/p' "$log_file" 2>/dev/null | head -1 || true)
-    if [[ -n "$score_match" ]]; then
-      score="$score_match"
+    local company=""
+    local role=""
+    local legitimacy=""
+    local ats_simulation_score=""
+    local screening_readiness_score=""
+    local report=""
+    local worker_error=""
+
+    worker_fields=$(extract_worker_fields "$log_file" 2>/dev/null || true)
+    if [[ -n "$worker_fields" ]]; then
+      IFS=$'\t' read -r worker_status score company role legitimacy ats_simulation_score screening_readiness_score report worker_error <<< "$worker_fields"
+    fi
+    [[ -z "$score" || "$score" == "null" ]] && score="-"
+    [[ "$ats_simulation_score" == "null" ]] && ats_simulation_score=""
+    [[ "$screening_readiness_score" == "null" ]] && screening_readiness_score=""
+
+    if [[ "$worker_status" == "failed" ]]; then
+      retries=$((retries + 1))
+      local reported_error="${worker_error:-Worker returned failed status}"
+      update_state "$id" "$url" "failed" "$started_at" "$completed_at" "$report_num" "-" "$reported_error" "$retries"
+      echo "    ❌ Failed (worker reported failed status)"
+      return 0
     fi
 
     # Check min-score gate
@@ -378,12 +475,39 @@ process_offer() {
       if (( $(echo "$score < $MIN_SCORE" | bc -l) )); then
         update_state "$id" "$url" "skipped" "$started_at" "$completed_at" "$report_num" "$score" "below-min-score" "$retries"
         echo "    ⏭️  Skipped (score: $score < min-score: $MIN_SCORE)"
-        continue
+        return 0
       fi
     fi
 
     update_state "$id" "$url" "completed" "$started_at" "$completed_at" "$report_num" "$score" "-" "$retries"
     echo "    ✅ Completed (score: $score, report: $report_num)"
+
+    if [[ "$FROM_PIPELINE" == "true" ]]; then
+      local queue_output=""
+      local queue_json=""
+      local queue_action=""
+      local queue_reason=""
+
+      queue_output=$(node "$PROJECT_DIR/prep-apply-queue.mjs" ingest-result \
+        --company "$company" \
+        --role "$role" \
+        --report "$report" \
+        --score "$score" \
+        --legitimacy "$legitimacy" \
+        --ats-simulation-score "$ats_simulation_score" \
+        --screening-readiness-score "$screening_readiness_score" \
+        --notes "$notes" 2>&1 || true)
+
+      queue_json=$(printf '%s\n' "$queue_output" | tail -1)
+      queue_action=$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(String(data.action || ""));' "$queue_json" 2>/dev/null || true)
+      queue_reason=$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(String(data.reason || ""));' "$queue_json" 2>/dev/null || true)
+
+      if [[ "$queue_action" == "queued" ]]; then
+        echo "    📥 Queue admitted: ${company:-Unknown company} — ${role:-Unknown role}"
+      else
+        echo "    ⏭️  Queue skipped: ${company:-Unknown company} — ${role:-Unknown role}${queue_reason:+ ($queue_reason)}"
+      fi
+    fi
   else
     retries=$((retries + 1))
     local error_msg
@@ -449,6 +573,15 @@ main() {
   fi
 
   init_state
+
+  if [[ "$FROM_PIPELINE" == "true" ]]; then
+    sync_pipeline_input
+  fi
+
+  if [[ ! -f "$INPUT_FILE" ]]; then
+    echo "ERROR: $INPUT_FILE not found. Add offers first."
+    exit 1
+  fi
 
   # Count input offers (skip header, ignore blank lines)
   local total_input

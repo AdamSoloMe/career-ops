@@ -18,6 +18,8 @@ All scripts live in the project root as `.mjs` modules and are exposed via `npm 
 | `npm run rollback` | `update-system.mjs rollback` | Rollback last update |
 | `npm run liveness` | `check-liveness.mjs` | Test if job URLs are still active |
 | `npm run scan` | `scan.mjs` | Zero-token portal scanner |
+| `node prep-apply-queue.mjs sync-input` | `prep-apply-queue.mjs` | Build apply-ready batch input from `data/pipeline.md` |
+| `node assemble-apply-packet.mjs ...` | `assemble-apply-packet.mjs` | Create per-job review packets under `reports/packets/` |
 
 ---
 
@@ -187,3 +189,55 @@ npm run scan
 ```
 
 **Exit codes:** `0` scan completed, `1` configuration error or no portals.yml found.
+
+---
+
+## prep-apply-queue
+
+Builds and maintains the apply-ready review queue. `sync-input` reads `data/pipeline.md`, filters out jobs already tracked or already active in `data/apply-queue.md`, and appends up to the configured `batch_cap` into `batch/batch-input.tsv`.
+
+```bash
+node prep-apply-queue.mjs sync-input
+node prep-apply-queue.mjs ingest-result --company "Acme" --role "Backend Engineer" --score 4.2 --ats 78 --legitimacy "High Confidence" --report reports/010-acme-2026-04-20.md
+```
+
+The queue gate is user-configurable via `config/profile.yml` or `config/profile.example.yml`:
+- `min_score`
+- `min_ats`
+- `legitimacy_floor`
+- `batch_cap`
+- `daily_review_cap`
+- `resume_variants`
+
+The script writes durable queue state to `data/apply-queue.md`. It prepares work for review only; it does not submit applications.
+
+---
+
+## assemble-apply-packet
+
+Creates per-job packet manifests under `reports/packets/` once a role is queue-eligible. Packet manifests are designed for fast manual review and manual submission.
+
+Expected responsibilities:
+- write `packet.md`
+- include report and variant paths
+- carry forward job URL, score, ATS, and legitimacy context
+- preserve the no-auto-submit boundary
+
+Manual submission remains the user's action even when the packet is fully prepared.
+
+---
+
+## batch-runner
+
+`batch/batch-runner.sh` supports a pipeline-fed mode:
+
+```bash
+batch/batch-runner.sh --from-pipeline
+```
+
+In this mode the runner:
+- calls `node "$PROJECT_DIR/prep-apply-queue.mjs" sync-input`
+- reuses the existing worker, tracker merge, retry, and verification flow
+- updates `data/apply-queue.md` immediately after each worker finishes
+
+Queue preparation is automated, but final application submission is still manual submission by the user.

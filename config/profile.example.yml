@@ -69,3 +69,13 @@ location:
   visa_status: "No sponsorship needed"
   # For remote roles outside your country:
   # onsite_availability: "1 week/month in any city"
+
+automation:
+  apply_queue:
+    enabled: true
+    min_score: 4.0
+    min_ats: 70
+    legitimacy_floor: "proceed-with-caution"
+    batch_cap: 20
+    daily_review_cap: 10
+    resume_variants: 3

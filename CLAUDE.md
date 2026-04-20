@@ -22,6 +22,8 @@ There are two layers. Read `DATA_CONTRACT.md` for the full list.
 
 **THE RULE: When the user asks to customize anything (archetypes, narrative, negotiation scripts, proof points, location policy, comp targets), ALWAYS write to `modes/_profile.md` or `config/profile.yml`. NEVER edit `modes/_shared.md` for user-specific content.** This ensures system updates don't overwrite their customizations.
 
+Apply-ready automation stops at queue preparation and never submits applications automatically.
+
 ## Update Check
 
 On the first message of each session, run the update checker silently:
@@ -50,6 +52,7 @@ AI-powered job search automation built on Claude Code: pipeline tracking, offer 
 | File | Function |
 |------|----------|
 | `data/applications.md` | Application tracker |
+| `data/apply-queue.md` | Apply-ready review queue for manual approval |
 | `data/pipeline.md` | Inbox of pending URLs |
 | `data/scan-history.tsv` | Scanner dedup history |
 | `portals.yml` | Query and company config |
