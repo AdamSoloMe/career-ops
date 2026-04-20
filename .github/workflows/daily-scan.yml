@@ -1,0 +1,35 @@
+name: Daily Job Discovery
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: true
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - run: npm install
+
+      - name: Run scanner
+        env:
+          ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+        run: node scan.mjs
+
+      - uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: 'chore(scan): daily discovery run'
+          file_pattern: 'data/pipeline.md data/scan-history.tsv'

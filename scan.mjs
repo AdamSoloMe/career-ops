@@ -3,9 +3,10 @@
 /**
  * scan.mjs — Zero-token portal scanner
  *
- * Fetches Greenhouse, Ashby, and Lever APIs directly, applies title
- * filters from portals.yml, deduplicates against existing history,
- * and appends new offers to pipeline.md + scan-history.tsv.
+ * Fetches Greenhouse, Ashby, Lever, Adzuna, and SerpAPI Google Jobs
+ * directly, applies title filters from portals.yml, deduplicates
+ * against existing history, and appends new offers to pipeline.md +
+ * scan-history.tsv.
  *
  * Zero Claude API tokens — pure HTTP + JSON.
  *
@@ -15,22 +16,33 @@
  *   node scan.mjs --company Cohere # scan a single company
  */
 
-import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync } from 'fs';
+import { mkdirSync, existsSync, readFileSync } from 'fs';
 import yaml from 'js-yaml';
+import {
+  SCAN_HISTORY_PATH,
+  PIPELINE_PATH,
+  FETCH_TIMEOUT_MS,
+  loadSeenUrls,
+  loadSeenCompanyRoles,
+  appendToPipeline,
+  appendToScanHistory,
+  normalizeJobUrl,
+  buildTitleFilter,
+  parallelFetch,
+  fetchJson,
+} from './scan-core.mjs';
+
 const parseYaml = yaml.load;
 
 // ── Config ──────────────────────────────────────────────────────────
 
 const PORTALS_PATH = 'portals.yml';
-const SCAN_HISTORY_PATH = 'data/scan-history.tsv';
-const PIPELINE_PATH = 'data/pipeline.md';
-const APPLICATIONS_PATH = 'data/applications.md';
+const PROFILE_PATH = 'config/profile.yml';
 
 // Ensure required directories exist (fresh setup)
 mkdirSync('data', { recursive: true });
 
 const CONCURRENCY = 10;
-const FETCH_TIMEOUT_MS = 10_000;
 
 // ── API detection ───────────────────────────────────────────────────
 
@@ -106,145 +118,138 @@ function parseLever(json, companyName) {
 
 const PARSERS = { greenhouse: parseGreenhouse, ashby: parseAshby, lever: parseLever };
 
-// ── Fetch with timeout ──────────────────────────────────────────────
+// ── newgrad-jobs.com scraper ────────────────────────────────────────
+// Fetches static HTML listing pages (no API available) and parses job
+// slugs of the form: title_words_at_company_words_NUMERICID
 
-async function fetchJson(url) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } finally {
-    clearTimeout(timer);
-  }
+function toTitleCase(str) {
+  return str.replace(/\b\w/g, c => c.toUpperCase());
 }
 
-// ── Title filter ────────────────────────────────────────────────────
+async function fetchNewGradJobs(categories, titleFilter, seenUrls, seenCompanyRoles) {
+  const BASE = 'https://www.newgrad-jobs.com';
+  const results = [];
+  const errors = [];
 
-function buildTitleFilter(titleFilter) {
-  const positive = (titleFilter?.positive || []).map(k => k.toLowerCase());
-  const negative = (titleFilter?.negative || []).map(k => k.toLowerCase());
+  for (const categoryPath of categories) {
+    const escaped = categoryPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`href="(${escaped}/([a-z0-9_]+))"`, 'g');
 
-  return (title) => {
-    const lower = title.toLowerCase();
-    const hasPositive = positive.length === 0 || positive.some(k => lower.includes(k));
-    const hasNegative = negative.some(k => lower.includes(k));
-    return hasPositive && !hasNegative;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      let html;
+      try {
+        const res = await fetch(`${BASE}${categoryPath}`, {
+          signal: controller.signal,
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; career-ops-scanner/1.0)' },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        html = await res.text();
+      } finally {
+        clearTimeout(timer);
+      }
+
+      for (const match of html.matchAll(pattern)) {
+        const path = match[1];
+        const slug = match[2];
+        const url = `${BASE}${path}`;
+
+        const atIdx = slug.lastIndexOf('_at_');
+        if (atIdx === -1) continue;
+
+        const title = toTitleCase(slug.substring(0, atIdx).replace(/_/g, ' '));
+        const company = toTitleCase(
+          slug.substring(atIdx + 4).replace(/_\d+$/, '').replace(/_/g, ' ')
+        );
+
+        if (!titleFilter(title)) continue;
+        if (seenUrls.has(url)) continue;
+        const key = `${company.toLowerCase()}::${title.toLowerCase()}`;
+        if (seenCompanyRoles.has(key)) continue;
+
+        seenUrls.add(url);
+        seenCompanyRoles.add(key);
+        results.push({ title, company, url, location: '', source: 'newgrad-jobs' });
+      }
+    } catch (err) {
+      errors.push({ company: `newgrad-jobs${categoryPath}`, error: err.message });
+    }
+  }
+
+  return { results, errors };
+}
+
+function loadDiscoveryConfig() {
+  if (!existsSync(PROFILE_PATH)) {
+    return { searchQueries: [], maxResultsPerSource: 50, country: 'us' };
+  }
+
+  const profile = parseYaml(readFileSync(PROFILE_PATH, 'utf-8'));
+  return {
+    searchQueries: profile?.discovery?.search_queries || [],
+    maxResultsPerSource: profile?.discovery?.max_results_per_source ?? 50,
+    country: profile?.discovery?.country || 'us',
   };
 }
 
-// ── Dedup ───────────────────────────────────────────────────────────
-
-function loadSeenUrls() {
-  const seen = new Set();
-
-  // scan-history.tsv
-  if (existsSync(SCAN_HISTORY_PATH)) {
-    const lines = readFileSync(SCAN_HISTORY_PATH, 'utf-8').split('\n');
-    for (const line of lines.slice(1)) { // skip header
-      const url = line.split('\t')[0];
-      if (url) seen.add(url);
-    }
-  }
-
-  // pipeline.md — extract URLs from checkbox lines
-  if (existsSync(PIPELINE_PATH)) {
-    const text = readFileSync(PIPELINE_PATH, 'utf-8');
-    for (const match of text.matchAll(/- \[[ x]\] (https?:\/\/\S+)/g)) {
-      seen.add(match[1]);
-    }
-  }
-
-  // applications.md — extract URLs from report links and any inline URLs
-  if (existsSync(APPLICATIONS_PATH)) {
-    const text = readFileSync(APPLICATIONS_PATH, 'utf-8');
-    for (const match of text.matchAll(/https?:\/\/[^\s|)]+/g)) {
-      seen.add(match[0]);
-    }
-  }
-
-  return seen;
-}
-
-function loadSeenCompanyRoles() {
-  const seen = new Set();
-  if (existsSync(APPLICATIONS_PATH)) {
-    const text = readFileSync(APPLICATIONS_PATH, 'utf-8');
-    // Parse markdown table rows: | # | Date | Company | Role | ...
-    for (const match of text.matchAll(/\|[^|]+\|[^|]+\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|/g)) {
-      const company = match[1].trim().toLowerCase();
-      const role = match[2].trim().toLowerCase();
-      if (company && role && company !== 'company') {
-        seen.add(`${company}::${role}`);
-      }
-    }
-  }
-  return seen;
-}
-
-// ── Pipeline writer ─────────────────────────────────────────────────
-
-function appendToPipeline(offers) {
-  if (offers.length === 0) return;
-
-  let text = readFileSync(PIPELINE_PATH, 'utf-8');
-
-  // Find "## Pendientes" section and append after it
-  const marker = '## Pendientes';
-  const idx = text.indexOf(marker);
-  if (idx === -1) {
-    // No Pendientes section — append at end before Procesadas
-    const procIdx = text.indexOf('## Procesadas');
-    const insertAt = procIdx === -1 ? text.length : procIdx;
-    const block = `\n${marker}\n\n` + offers.map(o =>
-      `- [ ] ${o.url} | ${o.company} | ${o.title}`
-    ).join('\n') + '\n\n';
-    text = text.slice(0, insertAt) + block + text.slice(insertAt);
-  } else {
-    // Find the end of existing Pendientes content (next ## or end)
-    const afterMarker = idx + marker.length;
-    const nextSection = text.indexOf('\n## ', afterMarker);
-    const insertAt = nextSection === -1 ? text.length : nextSection;
-
-    const block = '\n' + offers.map(o =>
-      `- [ ] ${o.url} | ${o.company} | ${o.title}`
-    ).join('\n') + '\n';
-    text = text.slice(0, insertAt) + block + text.slice(insertAt);
-  }
-
-  writeFileSync(PIPELINE_PATH, text, 'utf-8');
-}
-
-function appendToScanHistory(offers, date) {
-  // Ensure file + header exist
-  if (!existsSync(SCAN_HISTORY_PATH)) {
-    writeFileSync(SCAN_HISTORY_PATH, 'url\tfirst_seen\tportal\ttitle\tcompany\tstatus\n', 'utf-8');
-  }
-
-  const lines = offers.map(o =>
-    `${o.url}\t${date}\t${o.source}\t${o.title}\t${o.company}\tadded`
-  ).join('\n') + '\n';
-
-  appendFileSync(SCAN_HISTORY_PATH, lines, 'utf-8');
-}
-
-// ── Parallel fetch with concurrency limit ───────────────────────────
-
-async function parallelFetch(tasks, limit) {
+async function fetchAdzuna(query, { appId, appKey, country = 'us', maxResults = 50 }) {
+  const PER_PAGE = 50;
   const results = [];
-  let i = 0;
+  let page = 1;
 
-  async function next() {
-    while (i < tasks.length) {
-      const task = tasks[i++];
-      results.push(await task());
-    }
+  while (results.length < maxResults) {
+    const url = new URL(`https://api.adzuna.com/v1/api/jobs/${country}/search/${page}`);
+    url.searchParams.set('app_id', appId);
+    url.searchParams.set('app_key', appKey);
+    url.searchParams.set('what', query);
+    url.searchParams.set('results_per_page', String(Math.min(PER_PAGE, maxResults - results.length)));
+    url.searchParams.set('content-type', 'application/json');
+
+    const json = await fetchJson(url.toString());
+    const batch = (json.results || []).map(j => ({
+      title: j.title || '',
+      url: j.redirect_url || '',
+      company: j.company?.display_name || '',
+      location: j.location?.area?.join(', ') || '',
+      source: 'adzuna',
+    }));
+
+    results.push(...batch);
+    if (batch.length < PER_PAGE) break;
+    page++;
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
 
-  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => next());
-  await Promise.all(workers);
-  return results;
+  return results.slice(0, maxResults);
+}
+
+async function fetchSerpAPI(query, { apiKey, maxResults = 50 }) {
+  const results = [];
+  let nextPageToken = null;
+
+  while (results.length < maxResults) {
+    const url = new URL('https://serpapi.com/search');
+    url.searchParams.set('engine', 'google_jobs');
+    url.searchParams.set('q', query);
+    url.searchParams.set('api_key', apiKey);
+    if (nextPageToken) url.searchParams.set('next_page_token', nextPageToken);
+
+    const json = await fetchJson(url.toString());
+    const batch = (json.jobs_results || []).map(j => ({
+      title: j.title || '',
+      url: j.apply_options?.[0]?.link || j.share_link || '',
+      company: j.company_name || '',
+      location: j.location || '',
+      source: 'serpapi-google-jobs',
+    }));
+
+    results.push(...batch);
+    nextPageToken = json.serpapi_pagination?.next_page_token;
+    if (!nextPageToken || batch.length === 0) break;
+  }
+
+  return results.slice(0, maxResults);
 }
 
 // ── Main ────────────────────────────────────────────────────────────
@@ -264,6 +269,10 @@ async function main() {
   const config = parseYaml(readFileSync(PORTALS_PATH, 'utf-8'));
   const companies = config.tracked_companies || [];
   const titleFilter = buildTitleFilter(config.title_filter);
+  const { searchQueries, maxResultsPerSource, country } = loadDiscoveryConfig();
+  const adzunaAppId = process.env.ADZUNA_APP_ID;
+  const adzunaAppKey = process.env.ADZUNA_APP_KEY;
+  const serpApiKey = process.env.SERPAPI_KEY;
 
   // 2. Filter to enabled companies with detectable APIs
   const targets = companies
@@ -276,6 +285,8 @@ async function main() {
 
   console.log(`Scanning ${targets.length} companies via API (${skippedCount} skipped — no API detected)`);
   if (dryRun) console.log('(dry run — no files will be written)\n');
+  if (!adzunaAppId || !adzunaAppKey) console.log('Adzuna: skipped (ADZUNA_APP_ID / ADZUNA_APP_KEY not set)');
+  if (!serpApiKey) console.log('SerpAPI: skipped (SERPAPI_KEY not set)');
 
   // 3. Load dedup sets
   const seenUrls = loadSeenUrls();
@@ -288,6 +299,9 @@ async function main() {
   let totalDupes = 0;
   const newOffers = [];
   const errors = [];
+  let adzunaCount = 0;
+  let serpApiCount = 0;
+  let newgradCount = 0;
 
   const tasks = targets.map(company => async () => {
     const { type, url } = company._api;
@@ -322,6 +336,96 @@ async function main() {
 
   await parallelFetch(tasks, CONCURRENCY);
 
+  // ── External API sources ────────────────────────────────────────────
+  if (adzunaAppId && adzunaAppKey && searchQueries.length > 0) {
+    for (const query of searchQueries) {
+      try {
+        const jobs = await fetchAdzuna(query, {
+          appId: adzunaAppId,
+          appKey: adzunaAppKey,
+          country,
+          maxResults: maxResultsPerSource,
+        });
+        totalFound += jobs.length;
+
+        for (const job of jobs) {
+          if (!titleFilter(job.title)) {
+            totalFiltered++;
+            continue;
+          }
+          const normalizedUrl = normalizeJobUrl(job.url);
+          if (!normalizedUrl || seenUrls.has(normalizedUrl)) {
+            totalDupes++;
+            continue;
+          }
+          const key = `${job.company.toLowerCase()}::${job.title.toLowerCase()}`;
+          if (seenCompanyRoles.has(key)) {
+            totalDupes++;
+            continue;
+          }
+          seenUrls.add(normalizedUrl);
+          seenCompanyRoles.add(key);
+          newOffers.push({ ...job, url: normalizedUrl });
+          adzunaCount++;
+        }
+      } catch (err) {
+        errors.push({ company: `adzuna[${query}]`, error: err.message });
+      }
+    }
+  }
+
+  if (serpApiKey && searchQueries.length > 0) {
+    for (const query of searchQueries) {
+      try {
+        const jobs = await fetchSerpAPI(query, {
+          apiKey: serpApiKey,
+          maxResults: maxResultsPerSource,
+        });
+        totalFound += jobs.length;
+
+        for (const job of jobs) {
+          if (!titleFilter(job.title)) {
+            totalFiltered++;
+            continue;
+          }
+          const normalizedUrl = normalizeJobUrl(job.url);
+          if (!normalizedUrl || seenUrls.has(normalizedUrl)) {
+            totalDupes++;
+            continue;
+          }
+          const key = `${job.company.toLowerCase()}::${job.title.toLowerCase()}`;
+          if (seenCompanyRoles.has(key)) {
+            totalDupes++;
+            continue;
+          }
+          seenUrls.add(normalizedUrl);
+          seenCompanyRoles.add(key);
+          newOffers.push({ ...job, url: normalizedUrl });
+          serpApiCount++;
+        }
+      } catch (err) {
+        errors.push({ company: `serpapi[${query}]`, error: err.message });
+      }
+    }
+  }
+
+  // ── newgrad-jobs.com ────────────────────────────────────────────────
+  const newgradConfig = config.newgrad_jobs;
+  if (!filterCompany && newgradConfig?.enabled !== false && newgradConfig?.categories?.length > 0) {
+    const { results: ngResults, errors: ngErrors } = await fetchNewGradJobs(
+      newgradConfig.categories,
+      titleFilter,
+      seenUrls,
+      seenCompanyRoles
+    );
+    totalFound += ngResults.length;
+    for (const job of ngResults) {
+      newOffers.push(job);
+      newgradCount++;
+    }
+    errors.push(...ngErrors);
+  }
+
   // 5. Write results
   if (!dryRun && newOffers.length > 0) {
     appendToPipeline(newOffers);
@@ -337,6 +441,9 @@ async function main() {
   console.log(`Filtered by title:     ${totalFiltered} removed`);
   console.log(`Duplicates:            ${totalDupes} skipped`);
   console.log(`New offers added:      ${newOffers.length}`);
+  if (adzunaAppId && adzunaAppKey) console.log(`Adzuna new offers:     ${adzunaCount}`);
+  if (serpApiKey) console.log(`SerpAPI new offers:    ${serpApiCount}`);
+  if (newgradConfig?.enabled !== false && newgradConfig?.categories?.length > 0) console.log(`newgrad-jobs.com:      ${newgradCount}`);
 
   if (errors.length > 0) {
     console.log(`\nErrors (${errors.length}):`);

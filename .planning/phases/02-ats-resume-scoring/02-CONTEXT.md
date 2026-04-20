@@ -6,7 +6,7 @@
 <domain>
 ## Phase Boundary
 
-Add ATS keyword match scoring to every job evaluation. Every report produced by `/career-ops oferta`, auto-pipeline, and batch mode shows an ATS match score (%), the inferred ATS platform, and a breakdown of matched vs. missing keywords across three categories: hard skills, job title match, and soft skills/action verbs. Missing keywords are mapped back to specific CV experiences or project bullets with guidance on how to incorporate them.
+Add ATS keyword match scoring to every job evaluation. Every report produced by `/career-ops oferta`, auto-pipeline, and batch mode shows a dual-score ATS block: an **ATS Simulation Score** for machine-screening risk and a **Screening Readiness Score** for overall likelihood of passing initial screening. The report also shows the inferred ATS platform and a breakdown of matched vs. missing keywords across three categories: hard skills, job title match, and soft skills/action verbs. Missing keywords are mapped back to specific CV experiences or project bullets with guidance on how to incorporate them. The phase goal is to improve the resume enough to pass both ATS filtering and initial human review.
 
 New capabilities NOT in scope: auto-injecting keywords into cv.md, Jake's resume template (v2), email outreach pipeline (Phase 3).
 
@@ -24,11 +24,11 @@ New capabilities NOT in scope: auto-injecting keywords into cv.md, Jake's resume
 - **D-02:** The `**ATS:**` header line appears **after `**Score:**` and before `**Legitimacy:**`**. Full report header format:
   ```
   **Score:** {X/5}
-  **ATS:** {score}% ({platform}) — Missing: {kw1}, {kw2}, {kw3}
+  **ATS:** Sim {sim_score}% | Ready {ready_score}% ({platform}) — Missing: {kw1}, {kw2}, {kw3}
   **Legitimacy:** {High Confidence | Proceed with Caution | Suspicious}
   **PDF:** {path or pending}
   ```
-  The header line is intentionally brief — just the %, platform, and top missing keywords. Full detail lives in Block I body.
+  The header line is intentionally brief — just the two %, platform, and top missing keywords. Full detail lives in Block I body.
 
 ### Block I Body — Keyword Guidance
 
@@ -41,15 +41,57 @@ New capabilities NOT in scope: auto-injecting keywords into cv.md, Jake's resume
 
 ### Batch Mode
 
-- **D-04:** Batch mode (`claude -p` workers) runs the **full ATS analysis** — same 3-category breakdown as interactive mode. Context budget in workers is ample; no abbreviated version needed.
+- **D-04:** Batch mode (`claude -p` workers) runs the **full ATS analysis** — same dual-score logic and guidance depth as interactive mode. Context budget in workers is ample; no abbreviated version needed.
 
 ### Scoring Methodology
 
-- **D-05 (Claude's Discretion):** Scoring approach follows ATS-01: keyword frequency + semantic relevance, not raw string count. Three categories (ATS-03): hard skills keywords, job title match, soft skills/action verbs. Platform inference from URL (ATS-04): Greenhouse, Lever, Ashby, Workday, Taleo — each with a one-line note on typical strictness level. The planner implements the exact prompt logic for scoring within these constraints.
+- **D-05:** Use a **dual-score approach**:
+  - **ATS Simulation Score:** closer to `ats-screener` logic, focused on machine-screening risk from keyword alignment and platform-specific strictness
+  - **Screening Readiness Score:** broader score for passing initial screening, combining ATS alignment with quantified, convincing evidence for human review
+  The user-facing category breakdown remains hard skills, job title, and soft skills/action verbs, with a lightweight evidence/quantification layer used for readiness. Do not attempt to replicate PDF parsing, formatting simulation, or full 6-dimension scoring because this system reads canonical `cv.md`, not uploaded resumes.
+
+### Resume Improvement Goal
+
+- **D-06:** The primary success metric for Block I is usefulness in getting past initial screening. The ATS Simulation Score should tell the user how risky the resume is for machine filtering; the Screening Readiness Score should tell the user how ready the resume is for both machine and recruiter first-pass review. The output should prioritize concrete improvement guidance: which keywords matter most, where they naturally belong in the resume, when exact wording matters because the inferred ATS is stricter, and where bullets need stronger quantification for human review.
+
+### Fidelity Contract
+
+- **D-07: ATS Simulation Score must track ATS Screener where feasible from `cv.md`.**
+  It should mirror ATS Screener on:
+  - platform family and strategy intent for Workday, Taleo, iCIMS, Greenhouse, Lever, and SuccessFactors
+  - the idea that synonym / partial matches receive less than full credit, with `0.8` as the default reference value
+  - stricter exact-match treatment for exact-oriented platforms
+  - use of ATS-oriented thresholds and risk framing for the six documented ATS platforms:
+    - Workday `70`
+    - Taleo `65`
+    - iCIMS `60`
+    - Greenhouse `55`
+    - Lever `50`
+    - SuccessFactors `65`
+
+- **D-08: ATS Simulation Score may intentionally diverge from ATS Screener where the source inputs differ.**
+  It may diverge on:
+  - formatting, parser, and section-detection dimensions that require PDF/DOCX or rendered resume input; when scoring from `cv.md`, these dimensions are omitted rather than approximated
+  - any dimension that cannot be measured credibly from canonical `cv.md`
+  - education as a generic document-quality dimension; education is excluded from Simulation by default and only included when the JD explicitly requires a degree, certification, or educational credential that is clearly present or absent in `cv.md`
+  - multi-platform side-by-side scoring; career-ops uses one inferred platform, not six displayed platform scores
+  - Ashby support, which is excluded from ATS Screener parity and treated as a project-specific extension rather than part of the documented ATS Screener platform set
+
+- **D-09: Screening Readiness Score is intentionally project-specific.**
+  It exists to combine ATS alignment with recruiter-first-pass quality:
+  - quantified evidence
+  - ownership / scope clarity
+  - natural keyword placement guidance
+  - truthful rewrite suggestions for weak bullets
+
+- **D-10: Any divergence from ATS Screener must be named, not implied away.**
+  If the implementation does not match ATS Screener exactly, the output and docs must say so explicitly by using labels like `ATS Simulation Score` rather than claiming exact ATS Screener fidelity.
 
 ### Claude's Discretion
 
-- Exact scoring rubric within the 3 categories (how to weight each, how to compute the % from sub-scores)
+- Exact score weights for Simulation vs Readiness, provided the user-facing categories stay interpretable
+- Exact partial-match weighting (recommend closer to `ats-screener` than 0.5, e.g. 0.8 for near-synonyms)
+- How much quantification signal to include in Readiness without overwhelming the main keyword-alignment goal
 - How many missing keywords to show in the header line (recommend top 3–5)
 - Exact `test-all.mjs` regex pattern for the new `**ATS:**` header field
 - Whether Block I appears in `modes/batch.md` or only in `batch/batch-prompt.md`
@@ -76,7 +118,9 @@ New capabilities NOT in scope: auto-injecting keywords into cv.md, Jake's resume
 - `ROADMAP.md` — Phase 2 plans 2.1 and 2.2 contain implementation notes. Note: ROADMAP says "Block H" for ATS — the decision here (D-01) overrides that; ATS is Block I.
 
 ### External reference
-- `https://github.com/sunnypatell/ats-screener` — Reference implementation for scoring approach (keyword frequency + semantic relevance). Read before designing the scoring prompt.
+- `docs/ATS-SCORING-REFERENCE.md` — Local canonical reference for ATS Screener formulas, platform weights, thresholds, and guardrails. Read this first to avoid inventing ATS math.
+- `https://github.com/sunnypatell/ats-screener` — Reference implementation for scoring approach and platform-specific matching nuance. Read before designing the scoring prompt, but do not blindly copy dimensions that depend on PDF parsing or formatting analysis.
+- `https://ats-screener.vercel.app/docs/scoring/methodology/` — Canonical methodology page with the documented formulas, weight vectors, keyword formula, quirk model, and thresholds.
 
 </canonical_refs>
 
@@ -98,6 +142,7 @@ New capabilities NOT in scope: auto-injecting keywords into cv.md, Jake's resume
 - `modes/auto-pipeline.md` — insert `**ATS:**` line in the report header format (Step 2, report save)
 - `modes/batch.md` + `batch/batch-prompt.md` — include ATS block in worker instructions
 - `test-all.mjs` — add regex check for `**ATS:**` header field format
+- `docs/ATS-SCORING-REFERENCE.md` — required scoring reference before changing ATS math or claiming fidelity to ATS Screener
 
 </code_context>
 
@@ -107,6 +152,7 @@ New capabilities NOT in scope: auto-injecting keywords into cv.md, Jake's resume
 - ATS block should produce per-keyword placement guidance: not just "Missing: LangChain" but "Add to Experience > [specific bullet] — suggested phrasing: ..."
 - Soft skills/action verbs that don't map to a specific bullet are listed without placement guidance (list-only is fine for those)
 - Header line: brief (top 3–5 missing keywords max) — full detail in Block I body
+- Add a small quantification / evidence signal in Block I when the JD emphasizes outcomes, ownership, or measurable impact; this primarily affects Screening Readiness rather than ATS Simulation
 
 </specifics>
 

@@ -16,11 +16,11 @@
 - **D-02:** The `**ATS:**` header line appears **after `**Score:**` and before `**Legitimacy:**`**. Full report header format:
   ```
   **Score:** {X/5}
-  **ATS:** {score}% ({platform}) — Missing: {kw1}, {kw2}, {kw3}
+  **ATS:** Sim {sim_score}% | Ready {ready_score}% ({platform}) — Missing: {kw1}, {kw2}, {kw3}
   **Legitimacy:** {High Confidence | Proceed with Caution | Suspicious}
   **PDF:** {path or pending}
   ```
-  The header line is intentionally brief — just the %, platform, and top missing keywords. Full detail lives in Block I body.
+  The header line is intentionally brief — just the two %, platform, and top missing keywords. Full detail lives in Block I body.
 
 - **D-03:** Block I body does NOT just list missing keywords. For each missing keyword, it identifies which specific CV experience or project bullet could/should be updated, and how to naturally incorporate that keyword. Soft skills/action verbs that don't map to a specific bullet are listed without placement guidance.
   ```
@@ -28,13 +28,26 @@
   Suggested phrasing: "...orchestrated multi-step workflows using LangChain agents..."
   ```
 
-- **D-04:** Batch mode (`claude -p` workers) runs the **full ATS analysis** — same 3-category breakdown as interactive mode. Context budget in workers is ample; no abbreviated version needed.
+- **D-04:** Batch mode (`claude -p` workers) runs the **full ATS analysis** — same dual-score logic and guidance depth as interactive mode. Context budget in workers is ample; no abbreviated version needed.
 
-- **D-05 (Claude's Discretion):** Scoring approach follows ATS-01: keyword frequency + semantic relevance, not raw string count. Three categories (ATS-03): hard skills keywords, job title match, soft skills/action verbs. Platform inference from URL (ATS-04): Greenhouse, Lever, Ashby, Workday, Taleo — each with a one-line note on typical strictness level.
+- **D-05 (Claude's Discretion):** Scoring approach follows ATS-01: keyword frequency + semantic relevance, not raw string count. Use a dual-score model: ATS Simulation for machine risk, Screening Readiness for overall initial-screening quality. ATS Simulation parity applies to Workday, Taleo, iCIMS, Greenhouse, Lever, and SAP SuccessFactors. Ashby is a project-specific extension and not part of ATS Screener parity.
+
+### Hard Fidelity Rules
+
+- **R-01:** ATS Simulation Score uses ATS Screener pass thresholds for the six documented ATS platforms:
+  - Workday `70`
+  - Taleo `65`
+  - iCIMS `60`
+  - Greenhouse `55`
+  - Lever `50`
+  - SuccessFactors `65`
+- **R-02:** When scoring from `cv.md`, ATS Simulation omits formatting, parser, and section-detection dimensions rather than approximating them from markdown.
+- **R-03:** Education is excluded from ATS Simulation by default and is only included when the JD explicitly requires a degree, certification, or educational credential that is clearly present or absent in `cv.md`.
+- **R-04:** Ashby is excluded from ATS Screener parity and treated as a separate career-ops extension.
 
 ### Claude's Discretion
 
-- Exact scoring rubric within the 3 categories (how to weight each, how to compute the % from sub-scores)
+- Exact scoring rubric within the hybrid categories (how to weight each, how to compute the % from sub-scores)
 - How many missing keywords to show in the header line (recommend top 3–5)
 - Exact `test-all.mjs` regex pattern for the new `**ATS:**` header field
 - Whether Block I appears in `modes/batch.md` or only in `batch/batch-prompt.md`
@@ -61,11 +74,11 @@ None — discussion stayed within phase scope.
 
 This phase is entirely a **prompt engineering and markdown editing** phase — no new Node.js code, no new npm packages, no new CLI tools. All four requirements (ATS-01 through ATS-04) are implemented by adding a Block I prompt block to `modes/oferta.md`, updating the report header template in `modes/oferta.md`, `modes/auto-pipeline.md`, `batch/batch-prompt.md`, and adding one regex check to `test-all.mjs`. The implementation surface is small and well-bounded.
 
-The key intellectual work is designing the scoring rubric that maps naturally to a language model's strengths. ATS scoring in the real world uses TF-IDF + skills taxonomies and platform-specific matching algorithms. Because this system runs on Claude (not a dedicated parser), the scoring must be prompt-engineered: the model reads the JD, extracts keyword sets, reads `cv.md`, and reasons about presence/absence. The scoring formula must be explicit enough that results are consistent and comparable across evaluations without being so rigid that it produces nonsense outputs.
+The key intellectual work is designing the scoring rubric that maps naturally to a language model's strengths. The `ats-screener` reference repo uses a broader engine: custom TF-IDF/tokenization, a skills taxonomy, six platform profiles, and five scoring dimensions (formatting, keyword match, sections, experience, education). Because this system runs on Claude against `cv.md` rather than parsing uploaded PDF/DOCX files, the scoring must be prompt-engineered: the model reads the JD, extracts keyword sets, reads `cv.md`, and reasons about presence/absence. The scoring formula must be explicit enough that results are consistent and comparable across evaluations without being so rigid that it produces nonsense outputs.
 
 The existing `modes/oferta.md` Block G (Posting Legitimacy) is the canonical pattern to follow: it defines a structured analysis, uses signal tables, produces a tiered assessment, and has a clear output format. Block I follows the exact same implementation pattern.
 
-**Primary recommendation:** Implement Block I as a prompt block in `modes/oferta.md` following the Block G pattern. Define an explicit 3-category scoring rubric with stated weights. Use URL domain pattern matching for platform inference. Insert the `**ATS:**` header line exactly as specified in D-02.
+**Primary recommendation:** Implement Block I as a prompt block in `modes/oferta.md` following the Block G pattern. Use a dual-score approach: keep a score that is closer to `ats-screener` for machine-screening realism, and add a second score for overall screening readiness so the report remains actionable for resume improvement. Borrow from `ats-screener` the platform-specific matching mindset, the distinction between exact/fuzzy/semantic behavior, and the caution that a single ATS score is only a heuristic. Add a lightweight quantification/evidence check for Readiness. Do not try to copy the parser/formatting engine. In particular, ATS Simulation should omit formatting/parser/section dimensions when using `cv.md`, use ATS Screener thresholds for the six documented ATS platforms, exclude education unless the JD explicitly requires it, and treat Ashby as a separate extension. Insert the `**ATS:**` header line exactly as specified in D-02.
 
 ---
 
@@ -144,7 +157,7 @@ Job URL / JD text
   └─────────────────────────────────────────────┘
             │
             ▼
-  [Report header: **ATS:** {score}% ({platform}) — Missing: kw1, kw2, kw3]
+  [Report header: **ATS:** Sim {sim_score}% | Ready {ready_score}% ({platform}) — Missing: kw1, kw2, kw3]
   [Block I body: full breakdown + placement guidance]
 ```
 
@@ -186,17 +199,19 @@ test-all.mjs           ← Add regex check for **ATS:** field
 ```markdown
 ## I) ATS Analysis
 
-**ATS Score:** 74% (Greenhouse — semantic matching, moderate strictness)
+**ATS Simulation Score:** 74% (Greenhouse — semantic matching, moderate strictness)
+**Screening Readiness Score:** 72%
 
 ### Category Breakdown
 
 | Category | Matched | Missing | Score |
 |----------|---------|---------|-------|
-| Hard skills (50%) | Python, FastAPI, PostgreSQL | LangChain, Pinecone | 6/8 = 75% |
-| Job title match (30%) | "AI Engineer" | "Senior" prefix | 2/3 = 67% |
-| Soft skills / action verbs (20%) | Led, Shipped, Collaborated | Mentored | 4/5 = 80% |
+| Hard skills (45%) | Python, FastAPI, PostgreSQL | LangChain, Pinecone | 6/8 = 75% |
+| Job title match (25%) | "AI Engineer" | "Senior" prefix | 2/3 = 67% |
+| Soft skills / action verbs (15%) | Led, Shipped, Collaborated | Mentored | 4/5 = 80% |
+| Quantification / evidence (15%) | Reduced latency 40%, owned launch | No team scale called out | 2/3 = 67% |
 
-**Overall:** (0.75 × 0.50) + (0.67 × 0.30) + (0.80 × 0.20) = **74%**
+**Overall:** (0.75 × 0.45) + (0.67 × 0.25) + (0.80 × 0.15) + (0.67 × 0.15) = **72%**
 
 ### Missing Keyword Guidance
 
@@ -205,6 +220,9 @@ Suggested phrasing: "...orchestrated multi-step workflows using LangChain agents
 
 **Missing: Pinecone** — Add to "Projects > [RAG project]".
 Suggested phrasing: "...integrated Pinecone vector store for sub-100ms retrieval..."
+
+**Weak evidence: leadership scope** — Strengthen "Experience > [current company] > [delivery bullet]".
+Suggested phrasing: "...led a 4-engineer initiative that cut processing time by 40%..."
 
 **Missing: Mentored** *(soft skill — no specific bullet needed)*
 ```
@@ -229,7 +247,7 @@ Suggested phrasing: "...integrated Pinecone vector store for sub-100ms retrieval
 **Fecha:** {YYYY-MM-DD}
 **Arquetipo:** {detectado}
 **Score:** {X/5}
-**ATS:** {score}% ({platform}) — Missing: {kw1}, {kw2}, {kw3}
+**ATS:** Sim {sim_score}% | Ready {ready_score}% ({platform}) — Missing: {kw1}, {kw2}, {kw3}
 **Legitimacy:** {High Confidence | Proceed with Caution | Suspicious}
 **PDF:** {ruta o pendiente}
 ```
@@ -256,7 +274,7 @@ Suggested phrasing: "...integrated Pinecone vector store for sub-100ms retrieval
 
 - **Inventing a Node.js ATS scoring library:** All scoring is LLM reasoning from the prompt. Do NOT add a `score-ats.mjs` script. [CITED: CONTEXT.md code_context — "All scoring blocks are implemented as prompt instructions in modes/ markdown files — no Node.js scoring logic."]
 - **Modifying cv.md:** Block I reads cv.md the same way Block B does — read-only access. Never write. [CITED: modes/_shared.md NEVER rule #2]
-- **Separate ATS section in batch-state.tsv:** ATS score does not need a new column in batch-state.tsv. It lives in the report .md header only. The batch JSON stdout result could optionally include `"ats_score"` for orchestrator visibility — this is Claude's Discretion.
+- **Separate ATS section in batch-state.tsv:** ATS scores do not need new columns in batch-state.tsv. They live in the report .md header only. The batch JSON stdout result can include dual score fields for orchestrator visibility — this is Claude's Discretion.
 - **Floating-point precision theater:** The overall % should be rounded to the nearest integer. "74%" not "73.5%". [ASSUMED]
 - **Keyword stuffing guidance:** Block I must not suggest adding keywords the candidate lacks experience in. The guidance is about natural rephrasing of existing experience, not fabrication. [CITED: REQUIREMENTS.md Out of Scope — "ATS keyword stuffing... Actively penalized"]
 
@@ -270,28 +288,61 @@ Suggested phrasing: "...integrated Pinecone vector store for sub-100ms retrieval
 
 | Platform | URL Signal | Matching Behavior | Strictness |
 |----------|-----------|------------------|------------|
-| Greenhouse | `greenhouse.io`, `boards.greenhouse.io` | Fuzzy + semantic; LLM-assisted keyword suggestions in newer versions | Moderate — exact preferred but fuzzy tolerated |
+| Greenhouse | `greenhouse.io`, `boards.greenhouse.io` | Human-review oriented; scorecards and semantic search, but no resume auto-scoring by design | Moderate — optimize for clarity and role fit, not literal keyword stuffing |
 | Lever | `lever.co`, `jobs.lever.co` | Stemming-based; CRM Boolean search; strong PDF parser | Flexible — most formatting-forgiving major ATS |
-| Ashby | `ashbyhq.com`, `jobs.ashbyhq.com` | AI-assisted criteria matching (binary Meets/Does-not-Meet per criterion); no numeric ranking | Criterion-based — exactness depends on recruiter-defined criteria |
+| Ashby | `ashbyhq.com`, `jobs.ashbyhq.com` | AI-assisted criteria matching (binary Meets/Does-not-Meet per criterion); no numeric ranking | Criterion-based — project-specific extension, not ATS Screener parity |
 | Workday | `myworkday.com`, `workdayjobs.com` | NLP semantic; understands synonym equivalence | Moderate — NLP helps, but structured fields matter |
 | Taleo | `taleo.net`, Oracle/Taleo branded domains | Exact keyword only; no synonym recognition; no semantic analysis | Strictest — requires exact terminology from JD |
+| iCIMS | `icims.com`, `jobs.icims.com` | Semantic / taxonomy-assisted matching; forgiving on near-equivalents | Moderate — keyword coverage matters, but exact wording is not everything |
+| SAP SuccessFactors | `successfactors.com`, `sapsf.com` | Taxonomy normalization and structured parsing | Moderate-strict — structured fields and normalized skills matter |
 | Unknown | Everything else | Cannot infer — assume moderate strictness | — |
 
-**Confidence:** MEDIUM — Taleo/Workday/Greenhouse strictness ordering is consistent across 3+ industry sources. Ashby's binary criterion model is from official Ashby documentation.
+**Confidence:** MEDIUM — Taleo/Workday/Greenhouse/iCIMS/SuccessFactors behavior is consistent with the `ats-screener` README plus industry writeups. Ashby's binary criterion model is from official Ashby documentation and is a project-specific extension beyond the reference repo.
 
-### Recommended 3-Category Scoring Rubric
+### What to Import from `ats-screener` vs. What to Leave Out
 
-[ASSUMED — weights are reasonable based on industry research but not from a single authoritative source]
+[VERIFIED: https://github.com/sunnypatell/ats-screener README]
+
+| Reference repo insight | Use in Phase 2? | Why |
+|------------------------|-----------------|-----|
+| Different ATS platforms behave differently | Yes | Core requirement ATS-04 depends on this |
+| Exact vs. fuzzy vs. semantic matching strategies | Yes | Good calibration for prompt wording and strictness notes |
+| Six platform profiles (Workday, Taleo, iCIMS, Greenhouse, Lever, SuccessFactors) | Yes, adapted | We should reflect these where URL inference allows; Ashby remains an extra project-specific platform |
+| Five scoring dimensions (formatting, keyword match, sections, experience, education) | Partially | Keyword logic informs ATS Simulation; formatting/parser/sections are omitted from Simulation when using `cv.md`, and education only participates when explicitly required by the JD |
+| Quantification / evidence helps early human review | Yes, lightly | Strong bullets with metrics help both recruiter confidence and credibility of claimed matches |
+| Client-side PDF/DOCX parsing | No | Career-ops reads canonical `cv.md`, not uploaded files |
+| Multi-platform side-by-side scores | No | This phase needs one concise report block, not six separate dashboards |
+| "Single ATS score is meaningless without platform context" | Yes | This supports separating ATS Simulation from Screening Readiness in the header design |
+
+### Dual-Score Design
+
+**ATS Simulation Score**
+
+- Closest ATS Screener-aligned score in this project
+- Must use ATS Screener thresholds for Workday/Taleo/iCIMS/Greenhouse/Lever/SuccessFactors
+- Omits formatting, parser, and section-detection dimensions when the source input is `cv.md`
+- Excludes education by default unless the JD explicitly requires it
+- Excludes Ashby from ATS Screener parity
+
+**Screening Readiness Score**
+
+- Intentional career-ops extension
+- Combines ATS alignment with quantified evidence, ownership, scope clarity, and rewrite guidance for recruiter first-pass review
+
+### Recommended Readiness Rubric
+
+[ASSUMED — weights are reasonable based on industry research and the user's stated goal, but not from a single authoritative source]
 
 | Category | Weight | What to extract from JD | Scoring logic |
 |----------|--------|--------------------------|---------------|
-| Hard skills | 50% | Technical tools, frameworks, languages, platforms, methodologies (Python, LangChain, Kubernetes, etc.) | Count matched / total extracted; semantic: near-synonyms count as 0.5 match |
-| Job title match | 30% | Job title words and seniority level (Senior, Staff, Lead, Engineer, Manager, etc.) | Count title word matches in CV title/summary; seniority match scores separately |
-| Soft skills / action verbs | 20% | Action verbs (led, built, shipped, mentored, owned) and soft skill signals (cross-functional, communication, etc.) | Count present / total; any synonym counts as full match |
+| Hard skills | 45% | Technical tools, frameworks, languages, platforms, methodologies (Python, LangChain, Kubernetes, etc.) | Exact match strongest; near-synonym / close equivalent gets partial credit closer to `ats-screener` than a hard 0.5 |
+| Job title match | 25% | Job title words and seniority level (Senior, Staff, Lead, Engineer, Manager, etc.) | Match role noun, domain qualifier, and seniority against CV title/summary/recent bullets |
+| Soft skills / action verbs | 15% | Action verbs (led, built, shipped, mentored, owned) and soft skill signals (cross-functional, communication, etc.) | Count present / total; treat vague CV phrasing as weaker than explicit evidence |
+| Quantification / evidence | 15% | JD emphasis on ownership, scale, metrics, outcomes, impact | Reward bullets in `cv.md` that show measurable results, scope, or concrete outcomes aligned to the JD |
 
-**Overall %:** `(hard_score × 0.50) + (title_score × 0.30) + (soft_score × 0.20)` → round to nearest integer
+**Overall %:** `(hard_score × 0.45) + (title_score × 0.25) + (soft_score × 0.15) + (evidence_score × 0.15)` → round to nearest integer
 
-**Confidence:** ASSUMED — reasonable weights derived from industry data (hard skills dominate real ATS scoring per multiple sources), but exact numbers are discretionary per D-05.
+**Confidence:** ASSUMED — reasonable weights for the hybrid goal (pass ATS + human first pass), but exact numbers are discretionary per D-05.
 
 ### Keyword Extraction Guidelines
 
@@ -302,7 +353,7 @@ Suggested phrasing: "...integrated Pinecone vector store for sub-100ms retrieval
 - Frameworks and libraries (LangChain, React, FastAPI, PyTorch)
 - Platforms and services (AWS, GCP, Kubernetes, Postgres, Redis, Pinecone)
 - Methodologies (RAG, fine-tuning, RLHF, CI/CD, Agile)
-- Certifications and degrees (when listed as requirements)
+- Certifications and degrees (only for ATS Simulation when explicitly listed as requirements; otherwise they belong outside Simulation)
 
 **Job title keywords** — extract:
 - Core role noun (Engineer, Manager, Architect, Lead)
@@ -325,11 +376,29 @@ Since the scorer is Claude (not a regex parser), the prompt must define what cou
 
 [ASSUMED — based on industry patterns; exact thresholds are Claude's Discretion per D-05]
 
-- **Full match (1.0):** Exact keyword or direct synonym (e.g., JD says "LLM pipelines", CV says "LLM pipelines")
-- **Partial match (0.5):** Related term covering similar concept (e.g., JD says "LangChain", CV says "AI agent orchestration framework" — related but not exact)
+- **Full match (1.0):** Exact keyword or direct synonym where the wording would likely satisfy both ATS and recruiter expectations
+- **Partial match (0.8 recommended):** Related term covering the same practical concept but with different terminology (e.g., JD says "LangChain", CV says "AI agent orchestration framework")
 - **No match (0.0):** Concept absent from CV
 
-For the header line and block output, present binary matched/missing lists — don't show 0.5 partial matches as a separate category (confusing for the user). Count partial matches as full for the matched list, but note "(partial)" inline if the gap is meaningful.
+Calibrate partial matches by platform:
+- **Stricter ATS (Taleo, some SuccessFactors flows):** treat exact wording as much more important; partial matches should still surface as a gap worth fixing
+- **Moderate ATS (Workday, iCIMS, Greenhouse):** partial matches can count more strongly
+- **Flexible ATS (Lever):** semantic equivalents can count strongly if the experience is clearly relevant
+- **Ashby:** emphasize meeting recruiter criteria and evidence over keyword density; this is a project-specific mode, not ATS Screener parity
+
+For the header line and block output, present binary matched/missing lists — don't show a third "partial" bucket. Count partial matches in the score, but note "(partial)" inline when the wording should still be tightened.
+
+### Quantification / Evidence Signal
+
+[ASSUMED — hybrid addition for the user's stated goal]
+
+The reference methodology includes experience-oriented dimensions that help for human screening even when they are not classic ATS parser inputs. We should capture a lightweight version:
+
+- Reward bullets that include measurable impact, scale, ownership, or business outcome
+- If the JD emphasizes words like `scale`, `optimize`, `reduce`, `increase`, `own`, `ship`, or `drive`, the absence of quantified results in related CV bullets should reduce the evidence score
+- Placement guidance should suggest strengthening an existing bullet with concrete outcome framing when truthful, not just adding missing keywords
+
+This keeps the phase focused on resume improvement, not only ATS mimicry.
 
 ---
 
@@ -407,22 +476,25 @@ Lee `cv.md`. Extrae keywords del JD en tres categorías. Puntúa el CV contra ca
 
 ### Extracción de keywords del JD
 
-**Hard skills (50% del score):** Herramientas, frameworks, lenguajes, plataformas, metodologías explícitamente mencionadas.
+**Hard skills (45% del score):** Herramientas, frameworks, lenguajes, plataformas, metodologías explícitamente mencionadas.
 Máximo 15-20 términos más específicos. Priorizar secciones "required" y "preferred".
 
-**Job title keywords (30%):** Palabras del título del rol y modificadores de seniority (Senior, Staff, Lead, Head of).
+**Job title keywords (25%):** Palabras del título del rol y modificadores de seniority (Senior, Staff, Lead, Head of).
 
-**Soft skills / action verbs (20%):** Verbos de acción en bullets de requisitos (led, built, shipped, mentored, owned) y señales soft (cross-functional, stakeholder).
+**Soft skills / action verbs (15%):** Verbos de acción en bullets de requisitos (led, built, shipped, mentored, owned) y señales soft (cross-functional, stakeholder).
+
+**Quantification / evidence (15%):** Señales de impacto, ownership, escala, métricas y resultados explícitos en bullets relevantes del CV.
 
 ### Puntuación
 
 Para cada categoría:
 - **Match completo (1.0):** Keyword exacta o sinónimo directo presente en cv.md
-- **Match parcial (0.5):** Concepto relacionado presente pero no la terminología exacta
+- **Match parcial (0.8 recomendado):** Concepto relacionado presente pero no la terminología exacta
 - **Ausente (0.0):** Concepto no encontrado en cv.md
 
 Score de categoría = (suma de matches) / (total keywords extraídas) × 100%
-Score global = (hard_score × 0.50) + (title_score × 0.30) + (soft_score × 0.20) → redondear al entero más cercano
+Score de evidencia = calidad de métricas, outcomes, ownership y scale en bullets relevantes
+Score global = (hard_score × 0.45) + (title_score × 0.25) + (soft_score × 0.15) + (evidence_score × 0.15) → redondear al entero más cercano
 
 ### Inferencia de plataforma ATS
 
@@ -437,15 +509,17 @@ Score global = (hard_score × 0.50) + (title_score × 0.30) + (soft_score × 0.2
 
 ### Output del bloque I
 
-**ATS Score:** {score}% ({plataforma} — {strictness one-liner})
+**ATS Simulation Score:** {sim_score}% ({plataforma} — {strictness one-liner})
+**Screening Readiness Score:** {ready_score}%
 
 #### Breakdown por categoría
 
 | Categoría | Matched | Missing | Score |
 |-----------|---------|---------|-------|
-| Hard skills (50%) | {list} | {list} | {x}/{n} = {%}% |
-| Job title (30%) | {list} | {list} | {x}/{n} = {%}% |
-| Soft skills (20%) | {list} | {list} | {x}/{n} = {%}% |
+| Hard skills (45%) | {list} | {list} | {x}/{n} = {%}% |
+| Job title (25%) | {list} | {list} | {x}/{n} = {%}% |
+| Soft skills (15%) | {list} | {list} | {x}/{n} = {%}% |
+| Quantification / evidence (15%) | {strengths} | {gaps} | {x}/{n} = {%}% |
 
 #### Guía de keywords faltantes
 
@@ -466,7 +540,7 @@ Para soft skills sin bullet específico (listar sin guía de placement):
 **Fecha:** {YYYY-MM-DD}
 **Arquetipo:** {detectado}
 **Score:** {X/5}
-**ATS:** {score}% ({platform}) — Missing: {kw1}, {kw2}, {kw3}
+**ATS:** Sim {sim_score}% | Ready {ready_score}% ({platform}) — Missing: {kw1}, {kw2}, {kw3}
 **Legitimacy:** {High Confidence | Proceed with Caution | Suspicious}
 **URL:** {URL de la oferta}
 **PDF:** {ruta o pendiente}
@@ -509,6 +583,47 @@ All four files that must be updated in this phase:
 
 ---
 
+## Live Tool Reference: ats-screener.vercel.app
+
+**Source:** https://ats-screener.vercel.app (fetched 2026-04-20)
+
+The live deployment of the reference implementation confirms the approach and surfaces two differences worth noting for Block I design.
+
+### What it does (confirmed)
+
+- Scores against **6 platforms**: Workday, Oracle Taleo, iCIMS, Greenhouse, Lever, SAP SuccessFactors
+- Three matching strategies: **exact**, **fuzzy**, and **semantic** — mirrors what the README describes
+- Per-platform numeric scores (e.g. Workday 86, Taleo 75, Greenhouse 92) shown side-by-side
+- Client-side PDF/DOCX parsing in a Web Worker; only extracted text is sent for AI scoring
+- AI suggestions powered by **Gemini** with a rule-based fallback when offline
+
+### Five evaluation dimensions (live tool)
+
+The live UI breaks scoring into five dimensions — slightly different from the 3-category rubric in this research:
+
+| Live tool dimension | Maps to our Block I category |
+|--------------------|------------------------------|
+| Parsing simulation | (structural — not applicable; cv.md is already clean text) |
+| Formatting / visual | (not applicable — cv.md is markdown) |
+| Section detection | (not applicable — cv.md has standard sections) |
+| Keyword alignment | Hard skills + job title + soft skills (our 3 categories) |
+| Experience / education validation | Partially covered by hard skills scoring |
+
+**Implication for Block I:** The parsing/formatting/section dimensions are irrelevant for career-ops because cv.md is already clean, structured markdown — no PDF parsing needed. ATS Simulation should omit those dimensions rather than approximate them. Screening Readiness can still use evidence/quantification because that is an intentional project-specific extension.
+
+### New platforms from live tool
+
+The live tool includes **iCIMS** and **SAP SuccessFactors** which are absent from the research's platform table. These are large enterprise ATS platforms worth adding to the inference table:
+
+| Platform | URL Signal | Strictness |
+|----------|-----------|------------|
+| iCIMS | `icims.com`, `jobs.icims.com` | Moderate — keyword + skills taxonomy matching |
+| SAP SuccessFactors | `successfactors.com`, `sapsf.com` | Moderate-strict — structured fields matter; NLP limited |
+
+Add these to the platform inference table in Block I for completeness.
+
+---
+
 ## State of the Art
 
 | Old Approach | Current Approach | When Changed | Impact |
@@ -517,16 +632,16 @@ All four files that must be updated in this phase:
 | Single ATS assumed (Taleo dominance) | Platform-specific strictness calibration | ~2020–2024 | Lever/Greenhouse users need less exact matching; Taleo users still need exact copies |
 | ATS as gate | ATS + human review hybrid (Ashby AI) | 2024–2025 | Ashby uses binary criteria matching by recruiter-defined rules, not keyword scoring at all |
 
-**Platform landscape note:** Ashby's model (AI criteria matching) is fundamentally different from keyword-count ATS. A candidate on Ashby doesn't need to optimize for keyword density — they need to meet the recruiter's defined pass/fail criteria. The Block I prompt should note this distinction when inferring Ashby.
+**Platform landscape note:** Ashby's model (AI criteria matching) is fundamentally different from keyword-count ATS. A candidate on Ashby doesn't need to optimize for keyword density — they need to meet the recruiter's defined pass/fail criteria. In this project, Ashby should be treated as a separate extension, not ATS Screener parity.
 
 ---
 
 ## Open Questions
 
-1. **Batch worker JSON output — include ats_score field?**
+1. **Batch worker JSON output — include dual score fields?**
    - What we know: batch-prompt.md outputs a JSON result object (Paso 6). It currently includes `score`, `legitimacy`, `pdf`, `report`.
-   - What's unclear: Should `ats_score` be added as a new JSON field for orchestrator visibility?
-   - Recommendation: Claude's Discretion (D-05 scope). Add it — cheap to include, useful for batch analysis. `"ats_score": 74` or `null` if cv.md missing.
+   - What's unclear: Should both ATS Simulation and Screening Readiness be added as JSON fields for orchestrator visibility?
+   - Recommendation: Yes. Add them — cheap to include, useful for batch analysis. `"ats_simulation_score": 74` and `"screening_readiness_score": 69`, or `null` if cv.md missing.
 
 2. **Language modes (de/, fr/, ja/) — do they need Block I?**
    - What we know: `modes/de/_shared.md`, `modes/de/angebot.md` etc. exist and mirror the English modes for DACH users.
@@ -564,9 +679,9 @@ Step 2.6: SKIPPED (no external dependencies — this phase is prompt/markdown ed
 
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
-| A1 | Hard skills = 50%, Job title = 30%, Soft skills = 20% weighting | Scoring Rubric | Score values will differ from what a real ATS produces — but since this is a LLM heuristic score (not a real ATS parse), the weights are presentational. Low practical risk. |
+| A1 | Hybrid weights of 45/25/15/15 are a reasonable balance for ATS + human first-pass screening | Scoring Rubric | Different weights would change reported scores, but the main value remains relative guidance and resume improvement. |
 | A2 | Top 3–5 missing keywords in the header line is the right count | Code Examples | Too few = less useful; too many = cluttered header. User/planner can adjust. |
-| A3 | Batch JSON should include `"ats_score"` field | Open Questions | If orchestrators parse the JSON, missing field causes KeyError. Easy to add; risk of not adding is higher. |
+| A3 | Batch JSON should include dual ATS score fields | Open Questions | If orchestrators parse the JSON, missing fields cause mismatch with the dual-score design. Easy to add; risk of not adding is higher. |
 | A4 | Language modes (de/, fr/, ja/) are NOT updated in Phase 2 | Open Questions | DACH/FR/JA users evaluating with those modes won't see ATS block. Acceptable as phase scope boundary. |
 | A5 | Floating-point % rounded to nearest integer in output | Anti-Patterns | Visual only; no functional impact. |
 
@@ -575,6 +690,7 @@ Step 2.6: SKIPPED (no external dependencies — this phase is prompt/markdown ed
 ## Sources
 
 ### Primary (HIGH confidence)
+- `docs/ATS-SCORING-REFERENCE.md` — local canonical summary of ATS Screener formulas, weights, thresholds, and implementation guardrails
 - `modes/oferta.md` — Full block A–H structure, report header format, Block G pattern (read directly)
 - `modes/auto-pipeline.md` — Pipeline steps, existing report header format (read directly)
 - `batch/batch-prompt.md` — Worker template, self-contained duplication pattern (read directly)
@@ -587,6 +703,7 @@ Step 2.6: SKIPPED (no external dependencies — this phase is prompt/markdown ed
 - [ATS Scoring Algorithms: How To Beat ATS](https://scale.jobs/blog/understanding-ats-scoring-algorithms) — Taleo exact match, Workday NLP, Lever flexibility
 - [Free ATS Resume Score Checker](https://pro.kudoswall.com/guides/ats-resume-score-guide/) — 0-60% danger zone, 80%+ target thresholds
 - [sunnypatell/ats-screener README](https://github.com/sunnypatell/ats-screener) — TF-IDF + skills taxonomy approach; platform-specific matching strategies
+- [ats-screener.vercel.app](https://ats-screener.vercel.app) — Live implementation; see "Live Tool Reference" section below
 
 ### Tertiary (LOW confidence)
 - General WebSearch results on ATS keyword weighting — industry consensus on hard skills > soft skills weighting but no official algorithm specs
