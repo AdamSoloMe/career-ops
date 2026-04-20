@@ -19,7 +19,11 @@
 3. GitHub Actions cron runs daily at a configured time and commits updated `data/pipeline.md` and `data/scan-history.tsv` to the repo
 4. The same job posted on LinkedIn and Indeed under different tracking URLs appears only once in the pipeline
 
-**Plans:**
+**Plans:** 2 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — scan-core.mjs extraction + Adzuna + SerpAPI + profile.yml discovery section
+- [ ] 01-02-PLAN.md — GitHub Actions daily cron workflow with commit-back
 
 ### 1.1 — Extend scan.mjs with Adzuna + SerpAPI sources
 Extract shared dedup/write utilities into `scan-core.mjs`. Add Adzuna REST API integration and SerpAPI Google Jobs integration to `scan.mjs`. Read job title keywords from `config/profile.yml` (`search_queries` or `title_filter.positive`). Normalize LinkedIn/Indeed URLs before dedup check (extract numeric job ID / `jk=` param).
@@ -93,7 +97,7 @@ Define `data/contacts-cache.md` format (USER layer, markdown table: domain, name
 | OUT-04 | Phase 3 | 3.1 |
 | OUT-05 | Phase 3 | 3.2 |
 
-**Coverage:** 15/15 v1 requirements mapped ✓
+**Coverage:** 15/15 v1 requirements mapped
 
 ---
 *Created: 2026-04-19 | Milestone: v1*
