@@ -48,8 +48,8 @@ Create `.github/workflows/daily-scan.yml` that runs `node scan.mjs` on a daily s
 **Plans:** 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Block I (ATS Analysis) prompt in modes/oferta.md + report header **ATS:** field
-- [ ] 02-02-PLAN.md — Wire ATS into auto-pipeline.md, batch/batch-prompt.md, and test-all.mjs assertions
+- [x] 02-01-PLAN.md — Block I (ATS Analysis) prompt in modes/oferta.md + report header **ATS:** field
+- [x] 02-02-PLAN.md — Wire ATS into auto-pipeline.md, batch/batch-prompt.md, and test-all.mjs assertions
 
 ### 2.1 — ATS scoring logic in modes/oferta.md
 Add Block I (ATS Analysis) to `modes/oferta.md` after Block H (Draft Application Answers). Per D-01, Block H stays at `## H)` — Block I is appended as `## I) ATS Analysis`. Extract hard skills, job title keywords, and soft skills from the JD. Score against `cv.md` using 3-category weighted rubric (hard 50%, title 30%, soft 20%). Infer ATS platform from job URL (8 platforms including iCIMS and SAP SuccessFactors). Output structured score with matched/missing keyword lists and per-keyword placement guidance. Update report header template with `**ATS:**` between `**Score:**` and `**Legitimacy:**` per D-02.
