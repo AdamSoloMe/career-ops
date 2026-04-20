@@ -142,6 +142,93 @@ Analyze the job posting for signals that indicate whether this is a real, active
 
 ---
 
+## Bloque I — Análisis ATS
+
+Lee `cv.md` (ya cargado para Bloque B). Si `cv.md` no existe, escribir `**ATS:** N/A (cv.md not found)` y omitir el bloque completo.
+
+### Extracción de keywords del JD
+
+Extrae keywords en tres categorías. Priorizar secciones "required" y "preferred". Ignorar boilerplate genérico (beneficios, equal opportunity, ubicación, visa).
+
+**Hard skills (peso: 45%):** Herramientas, frameworks, lenguajes, plataformas, metodologías explícitamente nombradas (ej: Python, LangChain, Kubernetes, RAG, CI/CD). Máximo 15-20 términos más específicos.
+
+**Job title keywords (peso: 25%):** Palabras del título del rol y modificadores de seniority (ej: "Senior", "Staff", "Lead", "Head of", "Engineer", "Manager", "Architect").
+
+**Soft skills / action verbs (peso: 15%):** Verbos de acción en bullets de requisitos (ej: led, built, shipped, mentored, owned, collaborated) y señales soft (cross-functional, stakeholder, communication, strategic).
+
+**Quantification / evidence (peso: 15%):** Si el JD enfatiza impacto, ownership, scale, metrics o business outcomes, evaluar si `cv.md` muestra resultados medibles, alcance o evidencia concreta en los bullets relevantes.
+
+### Puntuación por categoría
+
+Para cada keyword extraída, evaluar contra `cv.md`:
+- **Match completo (1.0):** Keyword exacta o sinónimo directo presente en cv.md
+- **Match parcial (0.8 recomendado):** Concepto relacionado presente pero con terminología diferente (ej: JD dice "LangChain", CV dice "AI agent orchestration framework" - anotar como "(partial)")
+- **Ausente (0.0):** Concepto no encontrado en cv.md
+
+Ajustar severidad según ATS inferido:
+- Taleo / ATS más estrictos: favorecer wording exacto; si un término importante está solo como partial match, tratarlo como gap prioritario
+- Workday / iCIMS / Greenhouse: permitir más crédito a equivalencias semánticas
+- Lever: aceptar mejor equivalencias semánticas claras
+- Ashby: priorizar evidencia de criterios cumplidos y experiencia demostrable sobre densidad de keywords
+
+Score de categoría = (suma de match scores) / (total keywords extraídas) × 100%
+
+**ATS Simulation Score** = score centrado en matching ATS:
+- Base recomendada: (hard_score × 0.60) + (title_score × 0.25) + (soft_score × 0.15)
+- Aplicar más penalización a partial matches cuando el ATS inferido es estricto
+
+**Screening Readiness Score** = score para pasar filtro inicial completo:
+- Base recomendada: (hard_score × 0.45) + (title_score × 0.25) + (soft_score × 0.15) + (evidence_score × 0.15)
+- Este score sí incorpora fuertemente métricas, ownership, scope y outcomes
+
+### Inferencia de plataforma ATS
+
+Detectar plataforma por URL del JD:
+
+| URL contiene | Plataforma | Strictness |
+|-------------|------------|------------|
+| greenhouse.io | Greenhouse | Moderate — fuzzy + semantic matching |
+| lever.co | Lever | Flexible — stemming-based, most forgiving major ATS |
+| ashbyhq.com | Ashby | Criterion-based — binary Meets/Does-not-Meet per recruiter criteria; keyword density less relevant |
+| myworkdayjobs.com / workday.com | Workday | Moderate — NLP understands synonym equivalence |
+| taleo.net | Taleo | Strictest — exact keyword match only, no synonyms |
+| icims.com | iCIMS | Moderate — keyword + skills taxonomy matching |
+| successfactors.com / sapsf.com | SAP SuccessFactors | Moderate-strict — structured fields matter, NLP limited |
+| (ningún match) | Unknown | Assume moderate strictness |
+
+### Output del Bloque I
+
+**ATS Simulation Score:** {sim_score}% ({plataforma} — {strictness one-liner})
+**Screening Readiness Score:** {ready_score}%
+
+#### Breakdown por categoría
+
+| Categoría | Matched | Missing | Score |
+|-----------|---------|---------|-------|
+| Hard skills (45%) | {lista, comma-separated} | {lista} | {x}/{n} = {%}% |
+| Job title (25%) | {lista} | {lista} | {x}/{n} = {%}% |
+| Soft skills / action verbs (15%) | {lista} | {lista} | {x}/{n} = {%}% |
+| Quantification / evidence (15%) | {strengths} | {gaps} | {x}/{n} = {%}% |
+
+**Simulation formula:** ({hard}% × 0.60) + ({title}% × 0.25) + ({soft}% × 0.15) = **{sim_score}%**
+**Readiness formula:** ({hard}% × 0.45) + ({title}% × 0.25) + ({soft}% × 0.15) + ({evidence}% × 0.15) = **{ready_score}%**
+
+#### Guía de keywords faltantes
+
+Para cada keyword ausente de **hard skills** y **job title**, identificar dónde en cv.md añadirla naturalmente:
+
+**Missing: {keyword}** — Añadir a "Experience > {Empresa} > {bullet específico que ya existe}".
+Sugerencia: "...{frase natural integrando la keyword en experiencia existente - NUNCA inventar experiencia}..."
+
+Para soft skills / action verbs ausentes (sin guía de placement específica):
+- Missing soft skills: {lista}
+
+Si el bullet relevante existe pero está débil para screening humano:
+- **Weak evidence: {theme}** — Reforzar "Experience > {Empresa} > {bullet específico}" con contexto de escala, ownership o resultado medible ya real.
+- Sugerencia: "...{frase natural agregando métricas o impacto real sin inventar}..."
+
+**Regla crítica:** Guiar únicamente hacia reformulación de experiencia REAL. Nunca sugerir añadir skills que el candidato no tiene.
+
 ## Post-evaluación
 
 **SIEMPRE** después de generar los bloques A-G:
@@ -162,6 +249,7 @@ Guardar evaluación completa en `reports/{###}-{company-slug}-{YYYY-MM-DD}.md`.
 **Fecha:** {YYYY-MM-DD}
 **Arquetipo:** {detectado}
 **Score:** {X/5}
+**ATS:** Sim {sim_score}% | Ready {ready_score}% ({platform}) — Missing: {kw1}, {kw2}, {kw3}
 **Legitimacy:** {High Confidence | Proceed with Caution | Suspicious}
 **PDF:** {ruta o pendiente}
 
@@ -190,6 +278,9 @@ Guardar evaluación completa en `reports/{###}-{company-slug}-{YYYY-MM-DD}.md`.
 
 ## H) Draft Application Answers
 (solo si score >= 4.5 — borradores de respuestas para el formulario de aplicación)
+
+## I) ATS Analysis
+(contenido completo del bloque I)
 
 ---
 
