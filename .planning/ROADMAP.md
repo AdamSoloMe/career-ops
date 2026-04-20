@@ -45,13 +45,17 @@ Create `.github/workflows/daily-scan.yml` that runs `node scan.mjs` on a daily s
 3. Report notes inferred ATS platform (Greenhouse/Workday/Taleo/etc.) and what that means for strictness
 4. Score methodology matches the ats-screener approach — keyword frequency + semantic relevance, not raw string count
 
-**Plans:**
+**Plans:** 2 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Block I (ATS Analysis) prompt in modes/oferta.md + report header **ATS:** field
+- [ ] 02-02-PLAN.md — Wire ATS into auto-pipeline.md, batch/batch-prompt.md, and test-all.mjs assertions
 
 ### 2.1 — ATS scoring logic in modes/oferta.md
-Add a new Block H (ATS Analysis) to `modes/oferta.md` that runs after Block A–G. Extract hard skills, job title keywords, and soft skills from the JD. Score against `cv.md` using keyword frequency + semantic matching (modeled on github.com/sunnypatell/ats-screener). Infer ATS platform from job URL. Output structured score with matched/missing keyword lists.
+Add Block I (ATS Analysis) to `modes/oferta.md` after Block H (Draft Application Answers). Per D-01, Block H stays at `## H)` — Block I is appended as `## I) ATS Analysis`. Extract hard skills, job title keywords, and soft skills from the JD. Score against `cv.md` using 3-category weighted rubric (hard 50%, title 30%, soft 20%). Infer ATS platform from job URL (8 platforms including iCIMS and SAP SuccessFactors). Output structured score with matched/missing keyword lists and per-keyword placement guidance. Update report header template with `**ATS:**` between `**Score:**` and `**Legitimacy:**` per D-02.
 
 ### 2.2 — Wire ATS score into auto-pipeline and reports
-Update `modes/auto-pipeline.md` to include ATS score in the report header alongside Score and Legitimacy. Update report format: `**ATS:** {score}% ({platform})`. Update `modes/batch.md` and `batch/batch-prompt.md` to include ATS block. Verify `test-all.mjs` passes with new report header field.
+Update `modes/auto-pipeline.md` Step 2 to include Block I in saved reports and add `**ATS:**` to the report header instruction. Update `batch/batch-prompt.md` with full Block I instructions (same 3-category breakdown as interactive mode, per D-04), updated report header template, and `ats_score` field in Paso 6 JSON output. Add 3 assertions to `test-all.mjs` validating the **ATS:** field and Block I presence. Verify `node test-all.mjs` passes.
 
 ---
 
@@ -87,7 +91,7 @@ Define `data/contacts-cache.md` format (USER layer, markdown table: domain, name
 | DISC-04 | Phase 1 | 1.1 |
 | DISC-05 | Phase 1 | 1.1 |
 | DISC-06 | Phase 1 | 1.2 |
-| ATS-01 | Phase 2 | 2.1 |
+| ATS-01 | Phase 2 | 2.1 + 2.2 |
 | ATS-02 | Phase 2 | 2.1 + 2.2 |
 | ATS-03 | Phase 2 | 2.1 |
 | ATS-04 | Phase 2 | 2.1 |
@@ -100,4 +104,4 @@ Define `data/contacts-cache.md` format (USER layer, markdown table: domain, name
 **Coverage:** 15/15 v1 requirements mapped
 
 ---
-*Created: 2026-04-19 | Milestone: v1*
+*Created: 2026-04-19 | Milestone: v1 | Updated: 2026-04-20 (Phase 2 plans)*
