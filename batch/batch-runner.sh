@@ -370,10 +370,39 @@ const values = [
   payload.ats_simulation_score ?? "",
   payload.screening_readiness_score ?? "",
   payload.report ?? "",
+  payload.variant_1 ?? "",
+  payload.variant_2 ?? "",
+  payload.variant_3 ?? "",
+  payload.variant_count ?? "",
+  payload.job_url ?? "",
+  payload.packet_slug ?? "",
   payload.error ?? ""
 ];
 process.stdout.write(values.map((value) => String(value).replace(/[\t\r\n]+/g, " ").trim()).join("\t"));
 ' "$log_file"
+}
+
+read_daily_review_cap() {
+  node -e '
+const fs = require("fs");
+const path = require("path");
+const yaml = require("js-yaml");
+const root = process.argv[1];
+const candidates = [
+  path.join(root, "config/profile.yml"),
+  path.join(root, "config/profile.example.yml"),
+];
+for (const file of candidates) {
+  if (!fs.existsSync(file)) continue;
+  const data = yaml.load(fs.readFileSync(file, "utf8")) || {};
+  const cap = data?.automation?.apply_queue?.daily_review_cap;
+  if (cap !== undefined && cap !== null && cap !== "") {
+    process.stdout.write(String(cap));
+    process.exit(0);
+  }
+}
+process.stdout.write("10");
+' "$PROJECT_DIR"
 }
 
 sync_pipeline_input() {
@@ -452,15 +481,29 @@ process_offer() {
     local ats_simulation_score=""
     local screening_readiness_score=""
     local report=""
+    local variant_1=""
+    local variant_2=""
+    local variant_3=""
+    local variant_count="0"
+    local job_url=""
+    local packet_slug=""
     local worker_error=""
+    local packet_path="-"
+    local daily_review_cap=""
 
     worker_fields=$(extract_worker_fields "$log_file" 2>/dev/null || true)
     if [[ -n "$worker_fields" ]]; then
-      IFS=$'\t' read -r worker_status score company role legitimacy ats_simulation_score screening_readiness_score report worker_error <<< "$worker_fields"
+      IFS=$'\t' read -r worker_status score company role legitimacy ats_simulation_score screening_readiness_score report variant_1 variant_2 variant_3 variant_count job_url packet_slug worker_error <<< "$worker_fields"
     fi
     [[ -z "$score" || "$score" == "null" ]] && score="-"
     [[ "$ats_simulation_score" == "null" ]] && ats_simulation_score=""
     [[ "$screening_readiness_score" == "null" ]] && screening_readiness_score=""
+    [[ "$variant_count" == "null" || -z "$variant_count" ]] && variant_count="0"
+    [[ "$variant_1" == "null" ]] && variant_1=""
+    [[ "$variant_2" == "null" ]] && variant_2=""
+    [[ "$variant_3" == "null" ]] && variant_3=""
+    [[ "$job_url" == "null" || -z "$job_url" ]] && job_url="$url"
+    daily_review_cap=$(read_daily_review_cap)
 
     if [[ "$worker_status" == "failed" ]]; then
       retries=$((retries + 1))
@@ -482,6 +525,27 @@ process_offer() {
     update_state "$id" "$url" "completed" "$started_at" "$completed_at" "$report_num" "$score" "-" "$retries"
     echo "    ✅ Completed (score: $score, report: $report_num)"
 
+    if [[ "$variant_count" == "3" && -n "$variant_1" && -n "$variant_2" && -n "$variant_3" ]]; then
+      local packet_output=""
+      packet_output=$(node "$PROJECT_DIR/assemble-apply-packet.mjs" \
+        --report-num "$report_num" \
+        --company "$company" \
+        --role "$role" \
+        --job-url "$job_url" \
+        --score "$score" \
+        --ats "${screening_readiness_score:-$ats_simulation_score}" \
+        --legitimacy "$legitimacy" \
+        --report "$report" \
+        --variant-1 "$variant_1" \
+        --variant-2 "$variant_2" \
+        --variant-3 "$variant_3" \
+        --packet-slug "$packet_slug" \
+        --date "$date" \
+        --daily-review-cap "$daily_review_cap" \
+        --notes "$notes" 2>/dev/null || true)
+      packet_path=$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(String(data.packet_path || "-"));' "$packet_output" 2>/dev/null || echo "-")
+    fi
+
     if [[ "$FROM_PIPELINE" == "true" ]]; then
       local queue_output=""
       local queue_json=""
@@ -496,14 +560,16 @@ process_offer() {
         --legitimacy "$legitimacy" \
         --ats-simulation-score "$ats_simulation_score" \
         --screening-readiness-score "$screening_readiness_score" \
-        --notes "$notes" 2>&1 || true)
+        --variant-count "$variant_count" \
+        --packet "$packet_path" \
+        --notes "$notes | daily_review_cap=$daily_review_cap" 2>&1 || true)
 
       queue_json=$(printf '%s\n' "$queue_output" | tail -1)
       queue_action=$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(String(data.action || ""));' "$queue_json" 2>/dev/null || true)
       queue_reason=$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(String(data.reason || ""));' "$queue_json" 2>/dev/null || true)
 
       if [[ "$queue_action" == "queued" ]]; then
-        echo "    📥 Queue admitted: ${company:-Unknown company} — ${role:-Unknown role}"
+        echo "    📥 Queue admitted: ${company:-Unknown company} — ${role:-Unknown role} (daily review cap: $daily_review_cap)"
       else
         echo "    ⏭️  Queue skipped: ${company:-Unknown company} — ${role:-Unknown role}${queue_reason:+ ($queue_reason)}"
       fi

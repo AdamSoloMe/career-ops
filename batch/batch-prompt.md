@@ -3,7 +3,7 @@
 Eres un worker de evaluación de ofertas de empleo for the candidate (read name from config/profile.yml). Recibes una oferta (URL + JD text) y produces:
 
 1. Evaluación completa A-G (report .md)
-2. PDF personalizado ATS-optimizado
+2. Resume variants for queue-eligible jobs
 3. Línea de tracker para merge posterior
 
 **IMPORTANTE**: Este prompt es self-contained. Tienes TODO lo necesario aquí. No dependes de ningún otro skill ni sistema.
@@ -282,7 +282,32 @@ Donde `{company-slug}` es el nombre de empresa en lowercase, sin espacios, con g
 (15-20 keywords del JD para ATS)
 ```
 
-### Paso 4 — Generar PDF
+### Paso 4 — Generar resume variants solo si pasa la queue gate
+
+Después de calcular `score`, `ats_simulation_score`, `screening_readiness_score` y `legitimacy`, evalúa la queue gate:
+
+- score `>= 4.0`
+- ATS `>= 70`
+- legitimacy no es `Suspicious`
+
+Usa `screening_readiness_score` como ATS principal para la gate. Si no está disponible, usa `ats_simulation_score`.
+
+Si la gate **NO** pasa:
+- No generes variantes extra
+- Deja `variant_1`, `variant_2`, `variant_3`, `job_url` y `packet_slug` en `null`
+- Fija `variant_count` a `0`
+- Continúa con el tracker line y el JSON final
+
+Si la gate **SÍ** pasa:
+- Genera exactamente **3** variantes de resume con intent distinto
+- Usa estos nombres exactos para la intención:
+  - `baseline_tailored`
+  - `keyword_forward`
+  - `human_readable`
+- Mantén el report principal único
+- Devuelve las rutas de las 3 variantes en el JSON final
+
+### Paso 4A — baseline_tailored
 
 1. Lee `cv.md` + `i18n.ts`
 2. Extrae 15-20 keywords del JD
@@ -300,10 +325,13 @@ Donde `{company-slug}` es el nombre de empresa en lowercase, sin espacios, con g
 ```bash
 node generate-pdf.mjs \
   /tmp/cv-candidate-{company-slug}.html \
-  output/cv-candidate-{company-slug}-{{DATE}}.pdf \
+  output/cv-candidate-{company-slug}-baseline-tailored-{{DATE}}.pdf \
   --format={letter|a4}
 ```
 14. Reporta: ruta PDF, nº páginas, % cobertura keywords
+15. Repite el mismo flujo para dos variantes adicionales:
+   - `keyword_forward` → `output/cv-candidate-{company-slug}-keyword-forward-{{DATE}}.pdf`
+   - `human_readable` → `output/cv-candidate-{company-slug}-human-readable-{{DATE}}.pdf`
 
 **Reglas ATS:**
 - Single-column (sin sidebars)
@@ -403,8 +431,14 @@ Al terminar, imprime por stdout un resumen JSON para que el orquestador lo parse
   "legitimacy": "{High Confidence|Proceed with Caution|Suspicious}",
   "ats_simulation_score": {ats_sim_score_integer_or_null},
   "screening_readiness_score": {ready_score_integer_or_null},
-  "pdf": "{ruta_pdf}",
+  "pdf": "{ruta_pdf_principal_o_baseline}",
   "report": "{ruta_report}",
+  "variant_1": "{ruta_variant_1_o_null}",
+  "variant_2": "{ruta_variant_2_o_null}",
+  "variant_3": "{ruta_variant_3_o_null}",
+  "variant_count": {0_or_3},
+  "job_url": "{{URL}}",
+  "packet_slug": "{company-slug}-{{DATE}}",
   "error": null
 }
 ```
@@ -418,10 +452,17 @@ Si algo falla:
   "company": "{empresa_o_unknown}",
   "role": "{rol_o_unknown}",
   "score": null,
+  "legitimacy": null,
   "ats_simulation_score": null,
   "screening_readiness_score": null,
   "pdf": null,
   "report": "{ruta_report_si_existe}",
+  "variant_1": null,
+  "variant_2": null,
+  "variant_3": null,
+  "variant_count": 0,
+  "job_url": null,
+  "packet_slug": null,
   "error": "{descripción_del_error}"
 }
 ```
