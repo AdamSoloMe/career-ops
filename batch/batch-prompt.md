@@ -168,15 +168,44 @@ Lee `cv.md` (ya cargado para Bloque B). Si `cv.md` no existe, escribir `**ATS:**
 
 **Quantification / evidence (peso: 15%):** Si el JD enfatiza ownership, scope, metrics, business impact o outcomes, evaluar si `cv.md` aporta evidencia concreta y resultados medibles.
 
-**Puntuación:** Match completo (1.0) / Match parcial (0.8 recomendado, anotar "(partial)") / Ausente (0.0)
-Calibrar según ATS inferido: Taleo y algunos flujos de SuccessFactors exigen wording más exacto; Workday/iCIMS/Greenhouse toleran más semántica; Lever es más flexible; Ashby prioriza evidencia de criterios cumplidos.
-Score categoría = (suma matches) / (total keywords) × 100%
+**Puntuación base:** Match completo (1.0) / Match parcial (0.8 recomendado, anotar "(partial)") / Ausente (0.0)
 
-**ATS Simulation Score** = (hard × 0.60) + (title × 0.25) + (soft × 0.15)
-Usar esto como score alineado con ATS Screener cuando el insumo es `cv.md`: no inventar formatting/parser quality, no incluir education salvo que el JD la exija explícitamente, y usar Ashby como extensión específica del proyecto, no como paridad ATS Screener.
+Calcular seis dimensiones Sunny-style antes de cualquier score de plataforma:
 
-**Screening Readiness Score** = (hard × 0.45) + (title × 0.25) + (soft × 0.15) + (evidence × 0.15)
-Este score sí incorpora outcomes, ownership, scope y cuantificación como heurística propia de career-ops.
+| Dimension | Cómo puntuar |
+|-----------|--------------|
+| Formatting | Proxy ATS-safe desde `cv.md` o PDF generado: single-column, headings estándar, texto parseable, sin info crítica en imágenes/headers/footers. Si solo hay markdown, marcarlo como "markdown proxy". |
+| Keyword Match | Fórmula Sunny-style: `K = min(100, ((|M| + 0.8 * |S|) / |J|) * 100)`, donde `|M|` son exact matches, `|S|` synonyms/partials, y `|J|` distinct JD keywords. |
+| Section Completeness | Summary, Work Experience, Skills, Projects, Education, Certifications si aplica. |
+| Experience Relevance | Evidencia directa contra archetype, seniority, domain y responsabilidades core. |
+| Education Match | Degree/certs si el JD lo pide; si no, puntuar neutral-alto y explicar que no diferencia. |
+| Quantification | Métricas, escala, ownership, outcomes y delivery concreto. |
+
+Calibrar Keyword Match por estrategia:
+- Workday, Taleo, SuccessFactors → exact-match-oriented; partials importantes se vuelven priority gaps
+- iCIMS → fuzzy keywords + skills taxonomy
+- Greenhouse, Lever → semantic/human-review-friendly; equivalentes claros cuentan más
+- Ashby → nota separada career-ops criterion-based; no es uno de los seis scores Sunny-style
+
+Calcular seis platform scores usando:
+
+`S_p = clamp(0, 100, sum_i(w_i(p) * d_i) + Q_p)`
+
+Usar `Q_p = 0` salvo que haya un issue específico y documentado visible en el resume/JD. Nunca inventar penalties de quirks.
+
+| Platform | Formatting | Keyword | Sections | Experience | Education | Quantification | Pass threshold | Strategy |
+|----------|------------|---------|----------|------------|-----------|----------------|----------------|----------|
+| Workday | 0.25 | 0.30 | 0.15 | 0.15 | 0.10 | 0.05 | 70 | Exact-oriented with NLP synonym support |
+| Taleo | 0.20 | 0.35 | 0.15 | 0.15 | 0.10 | 0.05 | 65 | Strict exact matching |
+| iCIMS | 0.15 | 0.30 | 0.15 | 0.20 | 0.10 | 0.10 | 60 | Fuzzy keyword plus skills taxonomy |
+| Greenhouse | 0.10 | 0.25 | 0.10 | 0.25 | 0.10 | 0.20 | 55 | Semantic and recruiter-review friendly |
+| Lever | 0.08 | 0.22 | 0.10 | 0.30 | 0.10 | 0.20 | 50 | Most forgiving semantic/stemming profile |
+| SuccessFactors | 0.25 | 0.25 | 0.20 | 0.15 | 0.10 | 0.05 | 65 | Structured-fields and exact-match oriented |
+
+**ATS Simulation Score** = score de la plataforma inferida desde la tabla de seis platforms. Si la plataforma es Unknown, usar el score más bajo entre Workday/Taleo/iCIMS/Greenhouse/Lever/SuccessFactors como simulación conservadora.
+
+**Screening Readiness Score** = (Experience Relevance × 0.40) + (Keyword Match × 0.25) + (Quantification × 0.20) + (Section Completeness × 0.10) + (Education Match × 0.05)
+Este score es una heurística career-ops de human screen; no es un score Sunny platform.
 
 **Inferencia de plataforma ATS por URL:**
 
@@ -203,8 +232,31 @@ Este score sí incorpora outcomes, ownership, scope y cuantificación como heur�
 | Soft skills (15%) | {lista} | {lista} | {x}/{n} = {%}% |
 | Quantification / evidence (15%) | {strengths} | {gaps} | {x}/{n} = {%}% |
 
-**Simulation formula:** ({hard}% × 0.60) + ({title}% × 0.25) + ({soft}% × 0.15) = **{sim_score}%**
-**Readiness formula:** ({hard}% × 0.45) + ({title}% × 0.25) + ({soft}% × 0.15) + ({evidence}% × 0.15) = **{ready_score}%**
+#### Sunny-style dimension scores
+
+| Dimension | Score | Evidence |
+|-----------|-------|----------|
+| Formatting | {%}% | {resume-structure evidence; say "markdown proxy" if no PDF/DOCX parse test exists} |
+| Keyword Match | {%}% | `K = min(100, ((|M| + 0.8 * |S|) / |J|) * 100)` = {calculation} |
+| Section Completeness | {%}% | {sections present/missing} |
+| Experience Relevance | {%}% | {role evidence summary} |
+| Education Match | {%}% | {education/certification match or neutral note} |
+| Quantification | {%}% | {metrics/outcomes evidence} |
+
+#### Sunny-style platform scores
+
+| Platform | Score | Pass threshold | Verdict | Strategy | Formula notes |
+|----------|-------|----------------|---------|----------|---------------|
+| Workday | {%}% | 70 | {Pass/Risk} | Exact-oriented with NLP synonym support | `S_p = clamp(0, 100, weighted dimensions + Q_p)` |
+| Taleo | {%}% | 65 | {Pass/Risk} | Strict exact matching | `S_p = clamp(0, 100, weighted dimensions + Q_p)` |
+| iCIMS | {%}% | 60 | {Pass/Risk} | Fuzzy keyword plus skills taxonomy | `S_p = clamp(0, 100, weighted dimensions + Q_p)` |
+| Greenhouse | {%}% | 55 | {Pass/Risk} | Semantic and recruiter-review friendly | `S_p = clamp(0, 100, weighted dimensions + Q_p)` |
+| Lever | {%}% | 50 | {Pass/Risk} | Most forgiving semantic/stemming profile | `S_p = clamp(0, 100, weighted dimensions + Q_p)` |
+| SuccessFactors | {%}% | 65 | {Pass/Risk} | Structured-fields and exact-match oriented | `S_p = clamp(0, 100, weighted dimensions + Q_p)` |
+
+**Keyword formula:** `K = min(100, ((|M| + 0.8 * |S|) / |J|) * 100)`
+**Platform formula:** `S_p = clamp(0, 100, sum_i(w_i(p) * d_i) + Q_p)`
+**Readiness formula:** (Experience Relevance × 0.40) + (Keyword Match × 0.25) + (Quantification × 0.20) + (Section Completeness × 0.10) + (Education Match × 0.05) = **{ready_score}%**
 
 Para cada keyword ausente de hard skills / job title — guía de placement:
 **Missing: {keyword}** — Añadir a "Experience > {Empresa} > {bullet específico}".
@@ -431,6 +483,23 @@ Al terminar, imprime por stdout un resumen JSON para que el orquestador lo parse
   "legitimacy": "{High Confidence|Proceed with Caution|Suspicious}",
   "ats_simulation_score": {ats_sim_score_integer_or_null},
   "screening_readiness_score": {ready_score_integer_or_null},
+  "ats_target_platform": "{Workday|Taleo|iCIMS|Greenhouse|Lever|SuccessFactors|Unknown|null}",
+  "ats_dimension_scores": {
+    "formatting": {integer_or_null},
+    "keyword_match": {integer_or_null},
+    "section_completeness": {integer_or_null},
+    "experience_relevance": {integer_or_null},
+    "education_match": {integer_or_null},
+    "quantification": {integer_or_null}
+  },
+  "ats_platform_scores": {
+    "workday": {integer_or_null},
+    "taleo": {integer_or_null},
+    "icims": {integer_or_null},
+    "greenhouse": {integer_or_null},
+    "lever": {integer_or_null},
+    "successfactors": {integer_or_null}
+  },
   "pdf": "{ruta_pdf_principal_o_baseline}",
   "report": "{ruta_report}",
   "variant_1": "{ruta_variant_1_o_null}",
@@ -455,6 +524,9 @@ Si algo falla:
   "legitimacy": null,
   "ats_simulation_score": null,
   "screening_readiness_score": null,
+  "ats_target_platform": null,
+  "ats_dimension_scores": null,
+  "ats_platform_scores": null,
   "pdf": null,
   "report": "{ruta_report_si_existe}",
   "variant_1": null,

@@ -5,16 +5,16 @@ source:
   - 02-01-SUMMARY.md
   - 02-02-SUMMARY.md
 started: 2026-04-20T19:20:47Z
-updated: 2026-04-20T19:29:55Z
+updated: 2026-04-21T00:12:00Z
 ---
 
 ## Current Test
 <!-- OVERWRITE each test - shows where we are -->
 
-number: 3
-name: Auto-pipeline preserves ATS header and block
+number: 6
+name: Sunny Six-Score Platform Coverage
 expected: |
-  Running the auto-pipeline path for a JD should save a report that still includes the `**ATS:**` header line and the ATS Analysis block, not just the legacy legitimacy header.
+  The ATS prompt should output all six Sunny-style dimension scores (Formatting, Keyword Match, Section Completeness, Experience Relevance, Education Match, Quantification) and all six Sunny-style platform scores (Workday, Taleo, iCIMS, Greenhouse, Lever, SuccessFactors) with pass thresholds, strategy notes, and formulas.
 awaiting: user response
 
 ## Tests
@@ -36,15 +36,25 @@ result: [pending]
 expected: The batch worker path should produce the ATS Analysis section in its saved report and expose `ats_simulation_score` plus `screening_readiness_score` in the final JSON output, or `null` for both if `cv.md` is unavailable.
 result: [pending]
 
+### 5. Sunny ATS Screener Alignment Boundary
+expected: The ATS output should behave like a simplified ATS Screener-style simulation: infer the target ATS platform, distinguish strict exact-match systems from semantic/fuzzy systems, show matched vs missing JD keywords, and label the result as `ATS Simulation Score` / `Screening Readiness Score` rather than claiming exact parity with Sunny Patel's ats-screener six-profile formula.
+result: pass
+
+### 6. Sunny Six-Score Platform Coverage
+expected: The ATS prompt should output all six Sunny-style dimension scores (Formatting, Keyword Match, Section Completeness, Experience Relevance, Education Match, Quantification) and all six Sunny-style platform scores (Workday, Taleo, iCIMS, Greenhouse, Lever, SuccessFactors) with pass thresholds, strategy notes, and formulas.
+result: [pending]
+
 ## Summary
 
-total: 4
+total: 6
 passed: 2
 issues: 0
-pending: 2
+pending: 3
 skipped: 0
 blocked: 0
 
 ## Gaps
 
-[none yet]
+### Gap 1 - Simplified ATS math did not expose Sunny-style platform scores
+status: fixed_pending_user_verification
+evidence: Initial Phase 2 implementation used a simplified hard/title/soft/evidence scoring model. The prompt contract has been updated to require six Sunny-style dimension scores and six platform-weighted scores while preserving the existing career-ops top-line fields.

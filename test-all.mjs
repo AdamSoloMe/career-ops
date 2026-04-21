@@ -268,6 +268,21 @@ if (/\*\*ATS:\*\* Sim \{sim_score\}% \| Ready \{ready_score\}% \(\{platform\}\)/
   fail('oferta.md missing ATS header format');
 }
 
+const sunnyPlatforms = ['Workday', 'Taleo', 'iCIMS', 'Greenhouse', 'Lever', 'SuccessFactors'];
+const batchPrompt = readFile('batch/batch-prompt.md');
+if (
+  sunnyPlatforms.every(platform => oferta.includes(platform)) &&
+  sunnyPlatforms.every(platform => batchPrompt.includes(platform)) &&
+  oferta.includes('S_p = clamp(0, 100, sum_i(w_i(p) * d_i) + Q_p)') &&
+  batchPrompt.includes('S_p = clamp(0, 100, sum_i(w_i(p) * d_i) + Q_p)') &&
+  oferta.includes('K = min(100, ((|M| + 0.8 * |S|) / |J|) * 100)') &&
+  batchPrompt.includes('K = min(100, ((|M| + 0.8 * |S|) / |J|) * 100)')
+) {
+  pass('ATS prompts include Sunny-style six-platform scoring contract');
+} else {
+  fail('ATS prompts missing Sunny-style six-platform scoring contract');
+}
+
 // ── 9. CLAUDE.md INTEGRITY ──────────────────────────────────────
 
 console.log('\n9. CLAUDE.md integrity');
