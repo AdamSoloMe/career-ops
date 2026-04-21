@@ -2,13 +2,13 @@
 
 ## What This Is
 
-An extension of the existing career-ops pipeline into a comprehensive, high-velocity job search engine. Three new capability layers are added on top of the existing evaluation, CV generation, and portal scanning infrastructure: (1) enhanced job discovery across LinkedIn, Indeed, Google Jobs, and new company sources running daily on autopilot; (2) ATS-optimized resume generation using Jake's resume template format with keyword scoring per job; and (3) a cold email outreach pipeline that finds hiring managers and engineers, drafts personalized emails, and pushes approved drafts to Gmail — all with quality guardrails to prevent spam.
+An extension of the existing career-ops pipeline into a comprehensive, high-velocity job search engine. Four capability layers are added on top of the existing evaluation, CV generation, and portal scanning infrastructure: (1) enhanced job discovery across LinkedIn, Indeed, Google Jobs, and new company sources running daily on autopilot; (2) ATS-optimized resume generation with keyword scoring per job; (3) apply-ready automation that turns discovered jobs into filtered, tailored, reviewable application packets at scale; and (4) a cold email outreach pipeline that finds hiring managers and engineers, drafts personalized emails, and pushes approved drafts to Gmail — all with quality guardrails to prevent spam.
 
-The goal: maximum application breadth with controlled quality — find every relevant job, apply fast with an ATS-passing resume, and reach out to humans in parallel to generate callbacks from both tracks.
+The goal: maximum application breadth with controlled quality — find every relevant job, generate the strongest possible application packet quickly, and then reach out to humans in parallel to generate callbacks from both tracks.
 
 ## Core Value
 
-Every relevant job gets found, applied to with an ATS-optimized resume, and followed up with a human-reviewed cold email — without burning contacts or Gmail reputation.
+Every relevant job gets found, turned into an apply-ready packet with an ATS-optimized resume, and followed up with a human-reviewed cold email — without burning contacts or Gmail reputation.
 
 ## Requirements
 
@@ -35,7 +35,14 @@ Every relevant job gets found, applied to with an ATS-optimized resume, and foll
 - [ ] ATS-03: Auto-inject relevant keywords from JD into resume without fabricating experience
 - [ ] ATS-04: Integrate into auto-pipeline flow — ATS score shown alongside oferta score
 
-**Feature C — Cold Email Outreach Pipeline**
+**Feature C — Apply-Ready Automation**
+- [ ] PIPE-01: Process jobs from `data/pipeline.md` in batch without manual URL-by-URL prompting
+- [ ] PIPE-02: Auto-generate a tailored ATS-optimized resume for jobs above a configurable fit threshold
+- [ ] PIPE-03: Build an application queue with report path, resume path, score, ATS score, and next action per job
+- [ ] PIPE-04: Auto-skip low-fit, duplicate, stale, or suspicious jobs using configurable rules
+- [ ] PIPE-05: Produce reviewable apply-ready packets only — never submit applications automatically
+
+**Feature D — Cold Email Outreach Pipeline**
 - [ ] OUT-01: Find contacts at target companies (hiring managers, engineers, internal recruiters) using Hunter.io/Apollo free tiers + company /about and /team pages + LinkedIn public data
 - [ ] OUT-02: Auto-queue outreach for jobs scoring 4.0+ (extend oferta evaluation trigger)
 - [ ] OUT-03: Draft personalized cold emails (under 150 words, intro/networking tone, user's voice from cv.md + profile.yml)
@@ -46,6 +53,7 @@ Every relevant job gets found, applied to with an ATS-optimized resume, and foll
 ### Out of Scope
 
 - LinkedIn scraping or automation that violates LinkedIn ToS — use public APIs and pages only
+- Never submit an application on the user's behalf — produce apply-ready output for human submission only
 - Auto-sending emails without human review — Gmail drafts only, user clicks send
 - Building a new separate codebase — all work extends existing modes/, scripts, and data contracts
 - Deep per-company research per email (doesn't scale) — quality comes from voice + brevity
@@ -55,9 +63,10 @@ Every relevant job gets found, applied to with an ATS-optimized resume, and foll
 
 **Existing infrastructure to extend (not replace):**
 - `scan.mjs` + `modes/scan.md` — extend with LinkedIn/Indeed/Google sources and scheduling hooks
-- `modes/contacto.md` — extend from LinkedIn DMs (300 chars) to email outreach pipeline
+- `modes/auto-pipeline.md` + batch flow — extend into apply-ready automation for newly discovered jobs
+- `modes/contacto.md` — extend later from LinkedIn DMs (300 chars) to email outreach pipeline
 - `generate-pdf.mjs` + `generate-latex.mjs` + `templates/cv-template.*` — extend with ATS scoring and Jake's template
-- `modes/auto-pipeline.md` — extend to trigger outreach queue after evaluation
+- tracker and queue artifacts in `data/` — extend with apply-ready queue state before outreach queue
 - `data/` flat-file pattern — new data files follow same Markdown/TSV conventions
 
 **Architecture pattern:** Prompt-as-code in `modes/`, utility logic in `.mjs` scripts, flat-file state in `data/`. New features follow the same pattern — no new server, no new database.
@@ -78,9 +87,10 @@ Every relevant job gets found, applied to with an ATS-optimized resume, and foll
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
+| Never auto-submit applications | Project rule and reputation control | Locked |
+| Build order: Discovery → ATS Resume → Apply-Ready Automation → Outreach | Discovery and resume quality feed the high-volume queue; outreach multiplies conversions later | Locked |
 | Gmail drafts (not direct send) | Human final checkpoint prevents spam and reputation damage | — Pending |
 | Extend contacto.md for email outreach | Existing contact-finding logic already handles target classification | — Pending |
-| Build order: Discovery → ATS Resume → Outreach | Discovery feeds everything; ATS resume is foundational; outreach multiplies conversions | — Pending |
 | Intro/networking tone (not direct pitch) | Higher reply rate at scale; direct pitch works better with deep research which doesn't scale | — Pending |
 | Guardrails baked in (not user discipline) | User explicitly wants structural enforcement for sustainable volume | — Pending |
 | Wider contact net, prune in review | MVP goal is testing whether outreach works — find all, user decides who gets emailed | — Pending |
@@ -103,4 +113,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-19 after initialization*
+*Last updated: 2026-04-20 after Phase 3 reorder*

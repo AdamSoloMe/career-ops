@@ -158,6 +158,14 @@ Analyze posting signals to assess whether this is a real, active opening.
 
 Lee `cv.md` (ya cargado para Bloque B). Si `cv.md` no existe, escribir `**ATS:** N/A (cv.md not found)` y omitir el bloque.
 
+Preferir scoring determinístico sobre estimaciones narrativas. En batch tienes `{{JD_FILE}}`, por lo que debes ejecutar o emular:
+
+```bash
+node ats-score.mjs --resume cv.md --jd-file {{JD_FILE}} --url "{{URL}}" --markdown
+```
+
+Usa ese output como base del Bloque I cuando sea posible. Nunca hacer boosts subjetivos al score ATS Sunny-style; cualquier juicio humano va en `Screening Readiness Score` o en el score global de la oferta.
+
 **Extracción de keywords del JD** (ignorar boilerplate: beneficios, equal opportunity, ubicación, visa):
 
 **Hard skills (peso: 45%):** Herramientas, frameworks, lenguajes, plataformas, metodologías (ej: Python, LangChain, Kubernetes, RAG). Máximo 15-20 términos más específicos. Priorizar "required" y "preferred".
@@ -196,9 +204,9 @@ Usar `Q_p = 0` salvo que haya un issue específico y documentado visible en el r
 | Platform | Formatting | Keyword | Sections | Experience | Education | Quantification | Pass threshold | Strategy |
 |----------|------------|---------|----------|------------|-----------|----------------|----------------|----------|
 | Workday | 0.25 | 0.30 | 0.15 | 0.15 | 0.10 | 0.05 | 70 | Exact-oriented with NLP synonym support |
-| Taleo | 0.20 | 0.35 | 0.15 | 0.15 | 0.10 | 0.05 | 65 | Strict exact matching |
+| Taleo | 0.20 | 0.35 | 0.15 | 0.15 | 0.10 | 0.05 | 75 | Strict exact matching |
 | iCIMS | 0.15 | 0.30 | 0.15 | 0.20 | 0.10 | 0.10 | 60 | Fuzzy keyword plus skills taxonomy |
-| Greenhouse | 0.10 | 0.25 | 0.10 | 0.25 | 0.10 | 0.20 | 55 | Semantic and recruiter-review friendly |
+| Greenhouse | 0.10 | 0.25 | 0.10 | 0.25 | 0.10 | 0.20 | 50 | Semantic and recruiter-review friendly |
 | Lever | 0.08 | 0.22 | 0.10 | 0.30 | 0.10 | 0.20 | 50 | Most forgiving semantic/stemming profile |
 | SuccessFactors | 0.25 | 0.25 | 0.20 | 0.15 | 0.10 | 0.05 | 65 | Structured-fields and exact-match oriented |
 
@@ -226,6 +234,7 @@ Este score es una heurística career-ops de human screen; no es un score Sunny p
 **Screening Readiness Score:** {ready_score}%
 
 Cada report markdown guardado debe mostrar la tabla de seis scoring metrics y la tabla de seis platform scores. No reemplazar estas tablas por resumen narrativo.
+Tambien debe mostrar confidence labels, keyword strategy scores, formatting deductions, quirk adjustments, final platform math y score drivers.
 
 | Categoría | Matched | Missing | Score |
 |-----------|---------|---------|-------|
@@ -245,20 +254,85 @@ Cada report markdown guardado debe mostrar la tabla de seis scoring metrics y la
 | 5 | Education Match | {%}% | JD credential requirements versus resume education/certs | {education/certification match or neutral note} |
 | 6 | Quantification | {%}% | Metrics, scale, ownership, outcomes, and proof density | {metrics/outcomes evidence} |
 
+#### ATS Confidence
+
+| Area | Confidence | Reason |
+|------|------------|--------|
+| Overall | {High/Medium/Low} | {si usa PDF/HTML generado, cv.md markdown, o texto incompleto} |
+| Formatting | {High/Medium/Low} | {mas fuerte si viene de PDF/HTML generado, mas debil si se infiere de markdown} |
+| Keyword matching | {High/Medium/Low} | {depende de JD completeness y extraccion de keywords} |
+
+#### Keyword Strategy Scores
+
+| Strategy | Platforms | Score | Exact matches | Partial/synonym matches | Missing exact terms |
+|----------|-----------|-------|---------------|-------------------------|---------------------|
+| Exact | Workday, Taleo, SuccessFactors | {%}% | {count/list} | 0 | {literal JD terms missing from cv.md} |
+| Fuzzy | iCIMS | {%}% | {count/list} | {count/list} | {missing terms} |
+| Semantic | Greenhouse, Lever | {%}% | {count/list} | {count/list} | {missing terms} |
+
+#### Formatting Deductions
+
+Usar el modelo documentado: `F = max(0, min(100, 100 - sum_k(p_k * sigma)))`.
+
+| Issue | Base penalty | Triggered? | Evidence |
+|-------|--------------|------------|----------|
+| Multi-column layout | 15 | {Yes/No} | {evidence} |
+| Tables detected | 12 | {Yes/No} | {evidence} |
+| Images/graphics | 8 | {Yes/No} | {evidence} |
+| Pages > 2 | 5 | {Yes/No} | {evidence} |
+| Word count < 150 | 10 | {Yes/No} | {evidence} |
+| Word count > 1500 | 3 | {Yes/No} | {evidence} |
+| Special char ratio > 5% | 8 | {Yes/No} | {evidence} |
+| All-caps lines > 3 | 3 | {Yes/No} | {evidence} |
+| Inconsistent bullets (> 2 styles) | 2 | {Yes/No} | {evidence} |
+
+#### Quirk Adjustments
+
+Quirk adjustments son negative-only. Usar `0` salvo que una condicion documentada este visiblemente triggered.
+
+| Platform | Quirk | Condition | Penalty | Triggered? |
+|----------|-------|-----------|---------|------------|
+| Workday | Non-standard headers | > 2 unrecognized section headers | -5 | {Yes/No} |
+| Workday | Page limit | > 2 pages | -8 | {Yes/No} |
+| Taleo | Low keyword density | < 5 exact skills detected with JD | -10 | {Yes/No} |
+| Taleo | Missing standard sections | > 1 required section missing | -8 | {Yes/No} |
+
 #### Sunny-style platform scores
 
-| Platform | Score | Pass threshold | Verdict | Strategy | Formula notes |
-|----------|-------|----------------|---------|----------|---------------|
-| Workday | {%}% | 70 | {Pass/Risk} | Exact-oriented with NLP synonym support | `S_p = clamp(0, 100, weighted dimensions + Q_p)` |
-| Taleo | {%}% | 65 | {Pass/Risk} | Strict exact matching | `S_p = clamp(0, 100, weighted dimensions + Q_p)` |
-| iCIMS | {%}% | 60 | {Pass/Risk} | Fuzzy keyword plus skills taxonomy | `S_p = clamp(0, 100, weighted dimensions + Q_p)` |
-| Greenhouse | {%}% | 55 | {Pass/Risk} | Semantic and recruiter-review friendly | `S_p = clamp(0, 100, weighted dimensions + Q_p)` |
-| Lever | {%}% | 50 | {Pass/Risk} | Most forgiving semantic/stemming profile | `S_p = clamp(0, 100, weighted dimensions + Q_p)` |
-| SuccessFactors | {%}% | 65 | {Pass/Risk} | Structured-fields and exact-match oriented | `S_p = clamp(0, 100, weighted dimensions + Q_p)` |
+| Platform | Weighted sum | Quirk penalty | Final score | Pass threshold | Auto-reject? | Verdict | Strategy |
+|----------|--------------|---------------|-------------|----------------|--------------|---------|----------|
+| Workday | {%}% | {0/-n} | {%}% | 70 | Conditional | {Pass/Risk} | Exact |
+| Taleo | {%}% | {0/-n} | {%}% | 75 | Yes | {Pass/Risk} | Exact |
+| iCIMS | {%}% | {0/-n} | {%}% | 60 | No | {Pass/Risk} | Fuzzy |
+| Greenhouse | {%}% | {0/-n} | {%}% | 50 | No | {Pass/Risk} | Semantic |
+| Lever | {%}% | {0/-n} | {%}% | 50 | No | {Pass/Risk} | Semantic |
+| SuccessFactors | {%}% | {0/-n} | {%}% | 65 | Conditional | {Pass/Risk} | Exact |
+
+#### Score Drivers
+
+| Driver | Finding |
+|--------|---------|
+| Biggest boost | {highest-impact strength by platform weights} |
+| Biggest drag | {lowest dimension or missing exact keyword cluster} |
+| Fastest fix | {single fastest truthful edit to improve ATS score} |
+| Platform most at risk | {lowest margin to threshold} |
+
+#### Exact-match rewrite guidance
+
+Para Workday, Taleo y SuccessFactors, listar literal JD terms faltantes que se puedan agregar sin mentir.
+
+| Missing exact term | Existing true evidence | Safe rewrite location | Suggested wording |
+|--------------------|------------------------|-----------------------|-------------------|
+| {term} | {cv evidence} | {section/bullet} | {wording} |
 
 **Keyword formula:** `K = min(100, ((|M| + 0.8 * |S|) / |J|) * 100)`
 **Platform formula:** `S_p = clamp(0, 100, sum_i(w_i(p) * d_i) + Q_p)`
 **Readiness formula:** (Experience Relevance × 0.40) + (Keyword Match × 0.25) + (Quantification × 0.20) + (Section Completeness × 0.10) + (Education Match × 0.05) = **{ready_score}%**
+
+Mantener separados:
+- **ATS Simulation Score:** solo platform math
+- **Screening Readiness Score:** estimacion humana de initial screen
+- **Global Score:** fit de career-ops para la oferta
 
 Para cada keyword ausente de hard skills / job title — guía de placement:
 **Missing: {keyword}** — Añadir a "Experience > {Empresa} > {bullet específico}".
@@ -386,6 +460,11 @@ node generate-pdf.mjs \
 15. Repite el mismo flujo para dos variantes adicionales:
    - `keyword_forward` → `output/cv-candidate-{company-slug}-keyword-forward-{{DATE}}.pdf`
    - `human_readable` → `output/cv-candidate-{company-slug}-human-readable-{{DATE}}.pdf`
+16. Si existen HTML/markdown intermedios para las variantes, compara las tres con:
+```bash
+node ats-score.mjs --resume {variant_html_or_md} --jd-file {{JD_FILE}} --url "{{URL}}" --json
+```
+17. En el packet/report, incluye una tabla `Variant ATS Comparison` con `variant`, `ats_simulation_score`, `human_screening_readiness`, `platform_most_at_risk`, y `recommended_use`. No selecciones una variante solo por ATS si sacrifica legibilidad humana.
 
 **Reglas ATS:**
 - Single-column (sin sidebars)
@@ -502,6 +581,18 @@ Al terminar, imprime por stdout un resumen JSON para que el orquestador lo parse
     "lever": {integer_or_null},
     "successfactors": {integer_or_null}
   },
+  "ats_confidence": "{High|Medium|Low|null}",
+  "ats_keyword_strategy_scores": {
+    "exact": {integer_or_null},
+    "fuzzy": {integer_or_null},
+    "semantic": {integer_or_null}
+  },
+  "ats_score_drivers": {
+    "biggest_boost": "{text_or_null}",
+    "biggest_drag": "{text_or_null}",
+    "fastest_fix": "{text_or_null}",
+    "platform_most_at_risk": "{text_or_null}"
+  },
   "pdf": "{ruta_pdf_principal_o_baseline}",
   "report": "{ruta_report}",
   "variant_1": "{ruta_variant_1_o_null}",
@@ -529,6 +620,9 @@ Si algo falla:
   "ats_target_platform": null,
   "ats_dimension_scores": null,
   "ats_platform_scores": null,
+  "ats_confidence": null,
+  "ats_keyword_strategy_scores": null,
+  "ats_score_drivers": null,
   "pdf": null,
   "report": "{ruta_report_si_existe}",
   "variant_1": null,

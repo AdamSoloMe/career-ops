@@ -275,6 +275,8 @@ if (
   sunnyPlatforms.every(platform => batchPrompt.includes(platform)) &&
   oferta.includes('#### ATS Scoring Metrics (Sunny-style)') &&
   batchPrompt.includes('#### ATS Scoring Metrics (Sunny-style)') &&
+  ['#### ATS Confidence', '#### Keyword Strategy Scores', '#### Formatting Deductions', '#### Quirk Adjustments', '#### Score Drivers', '#### Exact-match rewrite guidance'].every(section => oferta.includes(section)) &&
+  ['#### ATS Confidence', '#### Keyword Strategy Scores', '#### Formatting Deductions', '#### Quirk Adjustments', '#### Score Drivers', '#### Exact-match rewrite guidance'].every(section => batchPrompt.includes(section)) &&
   ['Formatting', 'Keyword Match', 'Section Completeness', 'Experience Relevance', 'Education Match', 'Quantification'].every(metric => oferta.includes(metric)) &&
   ['Formatting', 'Keyword Match', 'Section Completeness', 'Experience Relevance', 'Education Match', 'Quantification'].every(metric => batchPrompt.includes(metric)) &&
   oferta.includes('S_p = clamp(0, 100, sum_i(w_i(p) * d_i) + Q_p)') &&
@@ -285,6 +287,13 @@ if (
   pass('ATS prompts include Sunny-style six-platform scoring contract');
 } else {
   fail('ATS prompts missing Sunny-style six-platform scoring contract');
+}
+
+const pkg = JSON.parse(readFile('package.json'));
+if (pkg.scripts?.['ats:score'] === 'node ats-score.mjs') {
+  pass('package.json exposes ats:score script');
+} else {
+  fail('package.json missing ats:score script');
 }
 
 // ── 9. CLAUDE.md INTEGRITY ──────────────────────────────────────

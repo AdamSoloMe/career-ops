@@ -91,6 +91,7 @@ npm run doctor                     # Validates all prerequisites
 # 3. Configure
 cp config/profile.example.yml config/profile.yml  # Edit with your details
 cp templates/portals.example.yml portals.yml       # Customize companies
+cp .env.example .env                               # Optional: local API keys for scan.mjs
 
 # 4. Add your CV
 # Create cv.md in the project root with your CV in markdown
@@ -111,6 +112,9 @@ claude   # Open Claude Code in this directory
 > **The system is designed to be customized by Claude itself.** Modes, archetypes, scoring weights, negotiation scripts -- just ask Claude to change them. It reads the same files it uses, so it knows exactly what to edit.
 
 See [docs/SETUP.md](docs/SETUP.md) for the full setup guide.
+
+For local scanner keys, keep `SERPAPI_KEY`, `ADZUNA_APP_ID`, and `ADZUNA_APP_KEY` in
+the untracked `.env` file. For GitHub Actions, use repository secrets instead.
 
 ## Gemini CLI Integration
 

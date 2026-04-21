@@ -103,6 +103,17 @@ npm run pdf -- input.html output.pdf --format=letter   # US letter
 npm run pdf -- input.html output.pdf --format=a4        # A4 (default)
 ```
 
+## ats:score
+
+Runs a deterministic Sunny-style ATS simulation helper against a resume text/markdown/HTML file and a JD. It reports six platform scores, keyword strategy scores, formatting deductions, quirk penalties, confidence labels, score drivers, and separate human-screening readiness.
+
+```bash
+npm run ats:score -- --resume cv.md --jd-file /tmp/job.txt --url "https://job-boards.greenhouse.io/example/jobs/123" --markdown
+node ats-score.mjs --resume cv.md --jd-file /tmp/job.txt --json
+```
+
+This helper is a career-ops approximation of Sunny Patel's documented scoring formulas, not the upstream ATS Screener implementation. It does not parse binary PDF/DOCX files directly; score the generated HTML or `cv.md`, and treat formatting scores as lower-confidence when the input is only markdown.
+
 **Exit codes:** `0` PDF generated, `1` missing arguments or generation failure.
 
 ---

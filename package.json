@@ -14,6 +14,7 @@
     "update": "node update-system.mjs apply",
     "rollback": "node update-system.mjs rollback",
     "liveness": "node check-liveness.mjs",
+    "ats:score": "node ats-score.mjs",
     "scan": "node scan.mjs",
     "gemini:eval": "node gemini-eval.mjs"
   },

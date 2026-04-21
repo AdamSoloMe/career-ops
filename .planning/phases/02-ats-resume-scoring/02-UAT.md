@@ -14,7 +14,7 @@ updated: 2026-04-21T00:12:00Z
 number: 6
 name: Sunny Six-Score Platform Coverage
 expected: |
-  The saved markdown report should visibly include an `ATS Scoring Metrics (Sunny-style)` table with all six scoring metrics (Formatting, Keyword Match, Section Completeness, Experience Relevance, Education Match, Quantification) plus a six-platform scores table (Workday, Taleo, iCIMS, Greenhouse, Lever, SuccessFactors) with pass thresholds, strategy notes, and formulas.
+  The saved markdown report should visibly include an `ATS Scoring Metrics (Sunny-style)` table with all six scoring metrics, keyword strategy scores, formatting deductions, quirk adjustments, final platform math, confidence labels, score drivers, exact-match rewrite guidance, and separate ATS Simulation vs Human Screening Readiness scores.
 awaiting: user response
 
 ## Tests
@@ -41,7 +41,7 @@ expected: The ATS output should behave like a simplified ATS Screener-style simu
 result: pass
 
 ### 6. Sunny Six-Score Platform Coverage
-expected: The saved markdown report should visibly include an `ATS Scoring Metrics (Sunny-style)` table with all six scoring metrics (Formatting, Keyword Match, Section Completeness, Experience Relevance, Education Match, Quantification) plus a six-platform scores table (Workday, Taleo, iCIMS, Greenhouse, Lever, SuccessFactors) with pass thresholds, strategy notes, and formulas.
+expected: The saved markdown report should visibly include an `ATS Scoring Metrics (Sunny-style)` table with all six scoring metrics, keyword strategy scores, formatting deductions, quirk adjustments, final platform math, confidence labels, score drivers, exact-match rewrite guidance, and separate ATS Simulation vs Human Screening Readiness scores.
 result: [pending]
 
 ## Summary

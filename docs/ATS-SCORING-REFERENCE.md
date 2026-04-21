@@ -7,6 +7,8 @@ Canonical external references for Phase 2 ATS scoring work. This file exists so 
 - GitHub repo: https://github.com/sunnypatell/ats-screener
 - README: https://raw.githubusercontent.com/sunnypatell/ats-screener/main/README.md
 - Scoring methodology: https://ats-screener.vercel.app/docs/scoring/methodology/
+- Scoring dimensions: https://ats-screener.vercel.app/docs/scoring/dimensions/
+- Pass/fail thresholds: https://ats-screener.vercel.app/docs/scoring/thresholds/
 
 ## What The External Docs Actually Define
 
@@ -71,18 +73,77 @@ The docs then specialize by strategy:
 
 Important detail: the docs explicitly weight synonym / partial matches at `0.8`, not `0.5`.
 
+## Formatting Deduction Model
+
+The dimensions and methodology pages define formatting as a deduction model:
+
+`F = max(0, min(100, 100 - sum_k(p_k * sigma)))`
+
+Where `p_k` is the base penalty for a triggered formatting issue and `sigma` is the platform strictness.
+
+Documented formatting penalties:
+
+| Issue | Base Penalty |
+|-------|--------------|
+| Multi-column layout | 15 |
+| Tables detected | 12 |
+| Images/graphics | 8 |
+| Pages > 2 | 5 |
+| Word count < 150 | 10 |
+| Word count > 1500 | 3 |
+| Special char ratio > 5% | 8 |
+| All-caps lines > 3 | 3 |
+| Inconsistent bullets (> 2 styles) | 2 |
+
+## Quantification Formula
+
+The docs define quantification as:
+
+`d_6 = floor((b_q / b_t) * 100)` when `b_t > 0`, otherwise `0`.
+
+Where:
+
+- `b_q` = experience bullets with numbers, percentages, or dollar amounts
+- `b_t` = total experience bullets
+
+This is not a general "evidence quality" score. It should be counted separately from human screening readiness.
+
+## Quirk Adjustments
+
+Quirk adjustments are always non-positive:
+
+`Q_p = -sum_j(q_j(p) * indicator(condition_j))`
+
+Documented quirks:
+
+| Platform | Quirk | Condition | Penalty |
+|----------|-------|-----------|---------|
+| Workday | Non-standard headers | > 2 unrecognized section headers | 5 |
+| Workday | Page limit | > 2 pages | 8 |
+| Taleo | Low keyword density | < 5 skills detected with JD | 10 |
+| Taleo | Missing standard sections | > 1 required section missing | 8 |
+
 ## Pass Thresholds
 
-From the docs:
+Use the dedicated pass/fail thresholds page when threshold values conflict with summaries elsewhere:
 
 | Platform | Passing Score |
 |----------|---------------|
 | Workday | 70 |
-| Taleo | 65 |
+| Taleo | 75 |
 | iCIMS | 60 |
-| Greenhouse | 55 |
+| Greenhouse | 50 |
 | Lever | 50 |
 | SuccessFactors | 65 |
+
+The thresholds page also distinguishes auto-reject behavior:
+
+- Taleo: Yes
+- Workday: Conditional
+- SuccessFactors: Conditional
+- iCIMS: No
+- Greenhouse: No
+- Lever: No
 
 ## Source-Code Pointers Mentioned By The Docs
 
@@ -104,6 +165,7 @@ Agents working on this project must follow these rules:
 - If scoring is based on `cv.md` rather than the generated PDF/DOCX resume, say that clearly. ATS Screener’s documented methodology includes formatting/parser-sensitive dimensions that may not be measurable from markdown alone.
 - If any part of the implementation intentionally diverges from ATS Screener, document the divergence in the phase artifacts instead of silently approximating it.
 - When in doubt, link back to the canonical docs above instead of paraphrasing from memory.
+- Keep ATS platform pass/fail separate from human screening readiness and overall job-fit score.
 
 ## Intended Use In This Repo
 

@@ -1,11 +1,13 @@
 ---
-status: complete
+status: diagnosed
 phase: 01-enhanced-job-discovery
 source:
   - 01-01-SUMMARY.md
   - 01-02-SUMMARY.md
-started: 2026-04-19T00:00:00Z
-updated: 2026-04-19T00:00:00Z
+  - 01-03-SUMMARY.md
+started: 2026-04-20T22:10:00Z
+updated: 2026-04-20T22:10:00Z
+updated: 2026-04-20T22:16:00Z
 ---
 
 ## Current Test
@@ -14,37 +16,50 @@ updated: 2026-04-19T00:00:00Z
 
 ## Tests
 
-### 1. scan-core.mjs loads and exports normalizeJobUrl
-expected: Running `node -e "import('./scan-core.mjs').then(m => console.log(typeof m.normalizeJobUrl))"` prints `function` with exit code 0.
+### 1. scan-core exports normalizeJobUrl
+expected: Running `node -e "import('./scan-core.mjs').then(m => console.log(typeof m.normalizeJobUrl))"` from the repo root prints `function` and exits successfully.
 result: pass
 
-### 2. URL normalization works
-expected: Running `node -e "import('./scan-core.mjs').then(m => console.log(m.normalizeJobUrl('https://www.linkedin.com/jobs/view/123?trk=abc')))"` prints a clean URL without tracking params (e.g. `https://www.linkedin.com/jobs/view/123`).
-result: pass
-note: output was https://www.linkedin.com/jobs/view/123/ (trailing slash, tracking params removed)
+### 2. URL normalization removes common tracking noise
+expected: Running `node -e "import('./scan-core.mjs').then(m => console.log(m.normalizeJobUrl('https://www.linkedin.com/jobs/view/123?trk=abc')))"` prints a canonical LinkedIn job URL without tracking params, and running the same check for an Indeed URL with `jk=` preserves the canonical job key.
+result: issue
+reported: "[eval]:1\nimport('./scan-core.mjs').then(m => console.log(m.normalizeJobUrl('https://\n                                                                  ^^^^^^^^^\nExpected ',', got 'ident'\n\nSyntaxError: Invalid or unexpected token\n    at makeContextifyScript (node:internal/vm:194:14)\n    at compileScript (node:internal/process/execution:388:10)\n    at evalTypeScript (node:internal/process/execution:260:22)\n    at node:internal/main/eval_string:71:3\n\nNode.js v25.8.0"
+severity: blocker
 
-### 3. scan.mjs dry-run succeeds
-expected: Running `node scan.mjs --dry-run` exits 0 and output includes `Portal Scan`, `(dry run — no files will be written)`, `Adzuna: skipped (ADZUNA_APP_ID / ADZUNA_APP_KEY not set)`, and `SerpAPI: skipped (SERPAPI_KEY not set)`.
+### 3. Scanner dry-run completes without crashing
+expected: Running `node scan.mjs --dry-run` exits 0. Output should show the scanner starting, keyed sources handled gracefully when env vars are missing, and no fatal runtime error.
 result: pass
-note: header reads "Scanning 73 companies via API" instead of "Portal Scan" — cosmetic, all functional signals present
 
-### 4. profile.yml has discovery section
-expected: `config/profile.yml` contains a `discovery:` key with Adzuna and SerpAPI sub-keys (can verify with `grep -A5 'discovery:' config/profile.yml`).
+### 4. Discovery configuration is user-editable
+expected: `config/profile.yml` contains a `discovery:` section with configurable search queries, and `scan.mjs` reads those settings without requiring code edits.
 result: pass
-note: discovery section present with search_queries; Adzuna/SerpAPI keys are configured via env vars, not inline in yml
 
-### 5. daily-scan.yml structure
-expected: `.github/workflows/daily-scan.yml` exists and contains: a `0 7 * * *` cron schedule, `workflow_dispatch`, `contents: write` permission, secrets `ADZUNA_APP_ID`/`ADZUNA_APP_KEY`/`SERPAPI_KEY`, `node scan.mjs` run step, and `stefanzweifel/git-auto-commit-action@v7`.
+### 5. Daily scan workflow is configured for unattended runs
+expected: `.github/workflows/daily-scan.yml` exists with a daily cron, `workflow_dispatch`, `contents: write`, env var injection from GitHub secrets, `node scan.mjs`, and scoped auto-commit limited to `data/pipeline.md data/scan-history.tsv`.
+result: pass
+
+### 6. Zero-key discovery sources are wired into the scanner
+expected: `portals.yml` includes the zero-key source config added in Phase 1, and `scan.mjs` contains RemoteOK, newgrad-jobs.com, and HN Hiring integration so discovery is not limited to `tracked_companies`.
 result: pass
 
 ## Summary
 
-total: 5
+total: 6
 passed: 5
-issues: 0
-skipped: 0
+issues: 1
 pending: 0
+skipped: 0
+blocked: 0
 
 ## Gaps
 
-[none yet]
+- truth: "Running `node -e \"import('./scan-core.mjs').then(m => console.log(m.normalizeJobUrl('https://www.linkedin.com/jobs/view/123?trk=abc')))\"` prints a canonical LinkedIn job URL without tracking params, and running the same check for an Indeed URL with `jk=` preserves the canonical job key."
+  status: failed
+  reason: "User reported: [eval]:1 import('./scan-core.mjs').then(m => console.log(m.normalizeJobUrl('https:// ... SyntaxError: Invalid or unexpected token"
+  severity: blocker
+  test: 2
+  root_cause: "The pasted `node -e` example was split across lines in the terminal input, so Node evaluated an unterminated string literal before `normalizeJobUrl()` ran. This is a command-entry issue, not a defect in `scan-core.mjs`."
+  artifacts: []
+  missing:
+    - "Re-run the normalization check as a single-line command."
+    - "If needed, replace the example with a shorter verification command during future UAT runs."

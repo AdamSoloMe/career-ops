@@ -42,6 +42,28 @@ Edit `portals.yml`:
 - Add companies you want to track in `tracked_companies`
 - Customize `search_queries` for your preferred job boards
 
+### 4.5 Optional: add local API keys securely
+
+For local runs of `node scan.mjs`, keep API keys in an untracked `.env` file instead of
+putting them in `config/profile.yml`, `portals.yml`, or any committed script.
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` and set only the keys you need:
+
+```bash
+SERPAPI_KEY=your_key_here
+ADZUNA_APP_ID=your_app_id_here
+ADZUNA_APP_KEY=your_app_key_here
+```
+
+Notes:
+- `.env` is already gitignored in this repo.
+- GitHub Actions should still use repository secrets, not `.env`.
+- `scan.mjs` now loads `.env` automatically for local runs.
+
 ### 5. Start using
 
 Open Claude Code in this directory:
