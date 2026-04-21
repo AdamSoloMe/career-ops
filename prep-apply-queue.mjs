@@ -35,6 +35,13 @@ const QUEUE_HEADER = `# Apply Queue
 |---|------|---------|------|-------|-----|------------|---------------|--------|--------|-------|
 `;
 
+const PIPELINE_TEMPLATE = `# Job Pipeline
+
+## Pendientes
+
+## Procesadas
+`;
+
 const TERMINAL_QUEUE_STATUSES = new Set(['skipped', 'expired', 'applied']);
 
 function ensureDir(path) {
@@ -45,6 +52,13 @@ function ensureApplyQueue() {
   ensureDir(DATA_DIR);
   if (!existsSync(APPLY_QUEUE_PATH)) {
     writeFileSync(APPLY_QUEUE_PATH, QUEUE_HEADER, 'utf8');
+  }
+}
+
+function ensurePipelineInbox() {
+  ensureDir(DATA_DIR);
+  if (!existsSync(PIPELINE_PATH)) {
+    writeFileSync(PIPELINE_PATH, PIPELINE_TEMPLATE, 'utf8');
   }
 }
 
@@ -151,7 +165,7 @@ function parseArgs(argv) {
 }
 
 function parsePipelineCandidates() {
-  if (!existsSync(PIPELINE_PATH)) return [];
+  ensurePipelineInbox();
   const text = readFileSync(PIPELINE_PATH, 'utf8');
   const lines = text.split('\n');
   const candidates = [];
@@ -341,6 +355,7 @@ function writeQueueRows(rows) {
 }
 
 function syncInput() {
+  ensurePipelineInbox();
   ensureApplyQueue();
   ensureBatchInput();
 
