@@ -232,6 +232,8 @@ Detect the platform from the JD URL:
 **ATS Simulation Score:** `{sim_score}% ({platform} - {strictness one-liner})`  
 **Screening Readiness Score:** `{ready_score}%`
 
+Every saved markdown report must show the six scoring metrics table and the six platform scores table below. Do not replace them with prose-only summaries.
+
 #### Category breakdown
 
 | Category | Matched | Missing | Score |
@@ -241,16 +243,16 @@ Detect the platform from the JD URL:
 | Soft skills / action verbs (15%) | {list} | {list} | {x}/{n} = {%}% |
 | Quantification / evidence (15%) | {strengths} | {gaps} | {x}/{n} = {%}% |
 
-#### Sunny-style dimension scores
+#### ATS Scoring Metrics (Sunny-style)
 
-| Dimension | Score | Evidence |
-|-----------|-------|----------|
-| Formatting | {%}% | {resume-structure evidence; say "markdown proxy" if no PDF/DOCX parse test exists} |
-| Keyword Match | {%}% | `K = min(100, ((|M| + 0.8 * |S|) / |J|) * 100)` = {calculation} |
-| Section Completeness | {%}% | {sections present/missing} |
-| Experience Relevance | {%}% | {role evidence summary} |
-| Education Match | {%}% | {education/certification match or neutral note} |
-| Quantification | {%}% | {metrics/outcomes evidence} |
+| # | Scoring metric | Score | How it was calculated | Evidence |
+|---|----------------|-------|-----------------------|----------|
+| 1 | Formatting | {%}% | ATS-safe structure proxy from markdown/PDF | {resume-structure evidence; say "markdown proxy" if no PDF/DOCX parse test exists} |
+| 2 | Keyword Match | {%}% | `K = min(100, ((|M| + 0.8 * |S|) / |J|) * 100)` = {calculation} | {exact/partial/missing keyword summary} |
+| 3 | Section Completeness | {%}% | Standard resume sections present / expected sections | {sections present/missing} |
+| 4 | Experience Relevance | {%}% | Direct role, archetype, seniority, and responsibility match | {role evidence summary} |
+| 5 | Education Match | {%}% | JD credential requirements versus resume education/certs | {education/certification match or neutral note} |
+| 6 | Quantification | {%}% | Metrics, scale, ownership, outcomes, and proof density | {metrics/outcomes evidence} |
 
 #### Sunny-style platform scores
 

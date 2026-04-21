@@ -273,6 +273,10 @@ const batchPrompt = readFile('batch/batch-prompt.md');
 if (
   sunnyPlatforms.every(platform => oferta.includes(platform)) &&
   sunnyPlatforms.every(platform => batchPrompt.includes(platform)) &&
+  oferta.includes('#### ATS Scoring Metrics (Sunny-style)') &&
+  batchPrompt.includes('#### ATS Scoring Metrics (Sunny-style)') &&
+  ['Formatting', 'Keyword Match', 'Section Completeness', 'Experience Relevance', 'Education Match', 'Quantification'].every(metric => oferta.includes(metric)) &&
+  ['Formatting', 'Keyword Match', 'Section Completeness', 'Experience Relevance', 'Education Match', 'Quantification'].every(metric => batchPrompt.includes(metric)) &&
   oferta.includes('S_p = clamp(0, 100, sum_i(w_i(p) * d_i) + Q_p)') &&
   batchPrompt.includes('S_p = clamp(0, 100, sum_i(w_i(p) * d_i) + Q_p)') &&
   oferta.includes('K = min(100, ((|M| + 0.8 * |S|) / |J|) * 100)') &&

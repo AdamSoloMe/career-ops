@@ -225,6 +225,8 @@ Este score es una heurística career-ops de human screen; no es un score Sunny p
 **ATS Simulation Score:** {sim_score}% ({plataforma} — {strictness})
 **Screening Readiness Score:** {ready_score}%
 
+Cada report markdown guardado debe mostrar la tabla de seis scoring metrics y la tabla de seis platform scores. No reemplazar estas tablas por resumen narrativo.
+
 | Categoría | Matched | Missing | Score |
 |-----------|---------|---------|-------|
 | Hard skills (45%) | {lista} | {lista} | {x}/{n} = {%}% |
@@ -232,16 +234,16 @@ Este score es una heurística career-ops de human screen; no es un score Sunny p
 | Soft skills (15%) | {lista} | {lista} | {x}/{n} = {%}% |
 | Quantification / evidence (15%) | {strengths} | {gaps} | {x}/{n} = {%}% |
 
-#### Sunny-style dimension scores
+#### ATS Scoring Metrics (Sunny-style)
 
-| Dimension | Score | Evidence |
-|-----------|-------|----------|
-| Formatting | {%}% | {resume-structure evidence; say "markdown proxy" if no PDF/DOCX parse test exists} |
-| Keyword Match | {%}% | `K = min(100, ((|M| + 0.8 * |S|) / |J|) * 100)` = {calculation} |
-| Section Completeness | {%}% | {sections present/missing} |
-| Experience Relevance | {%}% | {role evidence summary} |
-| Education Match | {%}% | {education/certification match or neutral note} |
-| Quantification | {%}% | {metrics/outcomes evidence} |
+| # | Scoring metric | Score | How it was calculated | Evidence |
+|---|----------------|-------|-----------------------|----------|
+| 1 | Formatting | {%}% | ATS-safe structure proxy from markdown/PDF | {resume-structure evidence; say "markdown proxy" if no PDF/DOCX parse test exists} |
+| 2 | Keyword Match | {%}% | `K = min(100, ((|M| + 0.8 * |S|) / |J|) * 100)` = {calculation} | {exact/partial/missing keyword summary} |
+| 3 | Section Completeness | {%}% | Standard resume sections present / expected sections | {sections present/missing} |
+| 4 | Experience Relevance | {%}% | Direct role, archetype, seniority, and responsibility match | {role evidence summary} |
+| 5 | Education Match | {%}% | JD credential requirements versus resume education/certs | {education/certification match or neutral note} |
+| 6 | Quantification | {%}% | Metrics, scale, ownership, outcomes, and proof density | {metrics/outcomes evidence} |
 
 #### Sunny-style platform scores
 
